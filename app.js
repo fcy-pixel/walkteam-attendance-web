@@ -3,6 +3,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // ── Firebase Config ──────────────────────────────────────────────────────────
+// ⚠️ 請將以下 FIREBASE_API_KEY / FIREBASE_SENDER_ID / FIREBASE_APP_ID
+//    替換為你的 Firebase 專案 walkteam-6ffb5 的 Web SDK 設定值。
+//    取得方式：Firebase Console → 專案設定 → 一般 → 你的應用程式 → Web
 const firebaseConfig = {
   apiKey: "FIREBASE_API_KEY",
   authDomain: "walkteam-6ffb5.firebaseapp.com",
