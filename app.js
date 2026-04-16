@@ -3,20 +3,18 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // ── Firebase Config ──────────────────────────────────────────────────────────
-// ⚠️ 請將以下 FIREBASE_API_KEY / FIREBASE_SENDER_ID / FIREBASE_APP_ID
-//    替換為你的 Firebase 專案 walkteam-6ffb5 的 Web SDK 設定值。
-//    取得方式：Firebase Console → 專案設定 → 一般 → 你的應用程式 → Web
 const firebaseConfig = {
-  apiKey: "FIREBASE_API_KEY",
+  apiKey: "AIzaSyBdHVgUd1xuAey4m6PNht2J0zzn2NlDwhY",
   authDomain: "walkteam-6ffb5.firebaseapp.com",
   projectId: "walkteam-6ffb5",
   storageBucket: "walkteam-6ffb5.firebasestorage.app",
-  messagingSenderId: "FIREBASE_SENDER_ID",
-  appId: "FIREBASE_APP_ID",
+  messagingSenderId: "383316920662",
+  appId: "1:383316920662:web:b8d2c1f23c075b674b6ef7",
+  measurementId: "G-1X71R19KXL",
 };
 
 // ── Config validation ────────────────────────────────────────────────────────
-const CONFIG_READY = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("FIREBASE_");
+const CONFIG_READY = true;
 
 let db;
 if (CONFIG_READY) {
