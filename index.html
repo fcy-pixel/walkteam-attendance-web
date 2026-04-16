@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>歸程隊 點名</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- ═══ Login Screen ═══ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-icon">✅</div>
+    <h2>歸程隊</h2>
+    <p class="login-sub">點名系統</p>
+    <select id="login-team">
+      <option value="A">歸程隊A隊</option>
+      <option value="B">歸程隊B隊</option>
+      <option value="C" selected>歸程隊C隊</option>
+    </select>
+    <input type="password" id="login-pwd" placeholder="🔒  輸入密碼…">
+    <button id="login-btn" class="btn-primary">登入</button>
+    <div id="login-error" class="error-msg" style="display:none">❌ 密碼錯誤</div>
+  </div>
+</div>
+
+<!-- ═══ Main App ═══ -->
+<div id="app" style="display:none">
+
+  <!-- Header -->
+  <div class="header-row">
+    <div id="header-card" class="header-card">
+      <div class="header-left">
+        <div class="header-title">🏃 <span id="header-team-label">歸程隊C隊</span>　點名系統</div>
+        <div class="header-date" id="header-date"></div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" id="header-progress" style="width:0%"></div>
+        </div>
+        <div class="header-pct" id="header-pct">出席率 0%</div>
+      </div>
+      <div class="header-right">
+        <div class="header-count"><span id="header-present">0</span><span class="header-total">/<span id="header-total">0</span></span></div>
+        <div class="header-count-label">已到 / 總人數</div>
+        <div id="header-skipped-badge" style="display:none"></div>
+      </div>
+    </div>
+    <button class="refresh-btn" id="refresh-btn" title="重新整理">🔄</button>
+  </div>
+
+  <!-- Clock -->
+  <div class="clock-bar">
+    <div class="clock" id="hkt-clock">--:--:--</div>
+    <div class="clock-label">香港時間 HKT</div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar" id="tab-bar">
+    <button class="tab active" data-tab="scan">📷 掃描點名</button>
+    <button class="tab" data-tab="list">📋 今日名單</button>
+    <button class="tab" data-tab="history">📅 歷史紀錄</button>
+    <button class="tab" data-tab="settings">⚙️ 設定</button>
+  </div>
+
+  <!-- ═══ Tab: 掃描點名 ═══ -->
+  <div id="tab-scan" class="tab-content">
+    <div class="scan-layout">
+      <div class="scan-left">
+        <div class="section-title">📷 Live QR 掃描</div>
+        <div class="qr-wrap">
+          <div id="qr-loading" class="qr-loading">
+            <div class="spinner"></div>
+            <span>開啟相機中…</span>
+          </div>
+          <div id="qr-reader" style="display:none"></div>
+          <div id="qr-overlay" class="qr-overlay" style="display:none">
+            <div class="corner-box"><i></i><div class="scan-line"></div></div>
+          </div>
+          <div class="qr-status" id="qr-status">
+            <div class="live-dot"></div>
+            <span id="qr-status-text">對準學生 QR 碼，自動掃描點名</span>
+          </div>
+        </div>
+        <div id="scan-result"></div>
+      </div>
+      <div class="scan-right">
+        <div class="section-title">🔍 手動搜尋點名</div>
+        <input type="text" id="manual-search" placeholder="姓名 / 班級+號 …" class="input-field">
+        <div id="manual-results"></div>
+        <div style="height:14px"></div>
+        <div class="section-title">🕐 最近報到</div>
+        <div id="recent-checkins"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab: 今日名單 ═══ -->
+  <div id="tab-list" class="tab-content" style="display:none">
+    <div id="list-empty" style="display:none" class="info-box">🗂️ 雲端尚無學生資料，請前往「設定」上傳 CSV 名單。</div>
+    <div id="list-content">
+      <div class="filter-row">
+        <input type="text" id="list-search" placeholder="搜尋班級或姓名…" class="input-field" style="flex:3">
+        <select id="list-filter" class="select-field" style="flex:1">
+          <option value="all">全部</option>
+          <option value="absent">未到 ⬜</option>
+          <option value="present">已到 ✅</option>
+          <option value="skipped">不跟歸程隊 🚫</option>
+        </select>
+      </div>
+      <div id="activity-alert" style="display:none"></div>
+      <div id="list-stats"></div>
+      <div id="list-cards"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab: 歷史紀錄 ═══ -->
+  <div id="tab-history" class="tab-content" style="display:none">
+    <div id="history-empty" class="info-box" style="display:none">尚無任何歷史紀錄。</div>
+    <div id="history-content">
+      <div class="filter-row">
+        <select id="history-date" class="select-field" style="flex:3"></select>
+        <button class="btn-outline" id="history-export-btn" style="flex:1">⬇️ 匯出</button>
+      </div>
+      <div id="history-summary"></div>
+      <div id="history-cards"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Tab: 設定 ═══ -->
+  <div id="tab-settings" class="tab-content" style="display:none">
+    <h3>⬇️ 匯出今日紀錄</h3>
+    <button class="btn-primary full-width" id="export-today-btn">📥 下載今日出席名單 (CSV)</button>
+
+    <hr>
+    <h3>📋 下載現有名單</h3>
+    <button class="btn-primary full-width" id="export-students-btn">📥 下載現有雲端名單 (CSV)</button>
+
+    <hr>
+    <h3>☁️ 上傳 / 更新雲端名單</h3>
+    <p class="caption">欄位：班級、學號、姓名、跟隨兄/姊回家、星期一～五。<strong>QR 碼內容為學生姓名。</strong></p>
+    <button class="btn-outline full-width" id="download-template-btn">📄 下載名單範本 (CSV)</button>
+    <div class="upload-area" id="upload-area">
+      <input type="file" id="csv-upload" accept=".csv" style="display:none">
+      <button class="btn-outline full-width" id="choose-csv-btn">選擇 CSV 檔案</button>
+    </div>
+    <div id="csv-preview" style="display:none">
+      <div id="csv-preview-info" class="info-box"></div>
+      <div id="csv-preview-table-wrap"></div>
+      <button class="btn-primary full-width" id="csv-upload-confirm-btn">☁️ 確認上傳至雲端</button>
+    </div>
+
+    <hr>
+    <h3>🔓 登出</h3>
+    <button class="btn-outline full-width" id="logout-btn">登出系統</button>
+
+    <hr>
+    <h3>🕐 修正歷史時區</h3>
+    <p class="caption">如過往紀錄時間顯示為 UTC（比香港慢 8 小時），按此一次性修正。每筆時間均 +8 小時。請勿重複執行。</p>
+    <button class="btn-outline full-width" id="fix-tz-btn">🔧 將所有歷史紀錄時間 +8 小時（UTC→HKT）</button>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
