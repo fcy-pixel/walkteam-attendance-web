@@ -250,37 +250,27 @@ function initLogin() {
   const screen = document.getElementById("login-screen");
   const app = document.getElementById("app");
   const teamSel = document.getElementById("login-team");
-  const pwdInput = document.getElementById("login-pwd");
   const btn = document.getElementById("login-btn");
-  const errMsg = document.getElementById("login-error");
 
   teamSel.value = currentTeam;
 
+  // 已取消密碼：選隊後按「進入」即可
+  btn.addEventListener("click", () => {
+    currentTeam = teamSel.value;
+    authenticated = true;
+    localStorage.setItem("wt_auth", "1");
+    localStorage.setItem("wt_team", currentTeam);
+    screen.style.display = "none";
+    app.style.display = "block";
+    initApp();
+  });
+
+  // 如果之前已登入過，直接進入
   if (authenticated) {
     screen.style.display = "none";
     app.style.display = "block";
     initApp();
-    return;
   }
-
-  btn.addEventListener("click", () => {
-    if (pwdInput.value === PWD) {
-      currentTeam = teamSel.value;
-      authenticated = true;
-      localStorage.setItem("wt_auth", "1");
-      localStorage.setItem("wt_team", currentTeam);
-      screen.style.display = "none";
-      app.style.display = "block";
-      errMsg.style.display = "none";
-      initApp();
-    } else {
-      errMsg.style.display = "block";
-    }
-  });
-
-  pwdInput.addEventListener("keydown", e => {
-    if (e.key === "Enter") btn.click();
-  });
 }
 
 function logout() {
@@ -288,7 +278,6 @@ function logout() {
   localStorage.removeItem("wt_auth");
   document.getElementById("app").style.display = "none";
   document.getElementById("login-screen").style.display = "flex";
-  document.getElementById("login-pwd").value = "";
   if (qrScanner) {
     try { qrScanner.stop(); } catch(e) {}
     qrScanner = null;
