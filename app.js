@@ -252,25 +252,19 @@ function initLogin() {
   const teamSel = document.getElementById("login-team");
   const btn = document.getElementById("login-btn");
 
-  teamSel.value = currentTeam;
+  // 每次進入都預設A隊，使用者需要手動選隊
+  teamSel.value = "A";
+  currentTeam = "A";
 
   // 已取消密碼：選隊後按「進入」即可
   btn.addEventListener("click", () => {
     currentTeam = teamSel.value;
     authenticated = true;
-    localStorage.setItem("wt_auth", "1");
     localStorage.setItem("wt_team", currentTeam);
     screen.style.display = "none";
     app.style.display = "block";
     initApp();
   });
-
-  // 如果之前已登入過，直接進入
-  if (authenticated) {
-    screen.style.display = "none";
-    app.style.display = "block";
-    initApp();
-  }
 }
 
 function logout() {
