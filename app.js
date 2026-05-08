@@ -562,11 +562,19 @@ function renderListTab() {
   const searchInput = document.getElementById("list-search");
   const filterSel = document.getElementById("list-filter");
 
+  // Save current values before cloning (cloneNode resets .value to DOM default)
+  const savedSearch = searchInput.value;
+  const savedFilter = filterSel.value;
+
   // Remove old listeners by cloning
   const newSearch = searchInput.cloneNode(true);
   searchInput.parentNode.replaceChild(newSearch, searchInput);
   const newFilter = filterSel.cloneNode(true);
   filterSel.parentNode.replaceChild(newFilter, filterSel);
+
+  // Restore values after clone
+  newSearch.value = savedSearch;
+  newFilter.value = savedFilter;
 
   newSearch.addEventListener("input", () => renderListCards());
   newFilter.addEventListener("change", () => renderListCards());
