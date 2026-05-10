@@ -250,36 +250,20 @@ function initLogin() {
   const screen = document.getElementById("login-screen");
   const app = document.getElementById("app");
   const teamSel = document.getElementById("login-team");
-  const pwdInput = document.getElementById("login-pwd");
   const btn = document.getElementById("login-btn");
-  const errMsg = document.getElementById("login-error");
 
-  teamSel.value = currentTeam;
+  // 每次進入都預設A隊，使用者需要手動選隊
+  teamSel.value = "A";
+  currentTeam = "A";
 
-  if (authenticated) {
+  // 已取消密碼：選隊後按「進入」即可
+  btn.addEventListener("click", () => {
+    currentTeam = teamSel.value;
+    authenticated = true;
+    localStorage.setItem("wt_team", currentTeam);
     screen.style.display = "none";
     app.style.display = "block";
     initApp();
-    return;
-  }
-
-  btn.addEventListener("click", () => {
-    if (pwdInput.value === PWD) {
-      currentTeam = teamSel.value;
-      authenticated = true;
-      localStorage.setItem("wt_auth", "1");
-      localStorage.setItem("wt_team", currentTeam);
-      screen.style.display = "none";
-      app.style.display = "block";
-      errMsg.style.display = "none";
-      initApp();
-    } else {
-      errMsg.style.display = "block";
-    }
-  });
-
-  pwdInput.addEventListener("keydown", e => {
-    if (e.key === "Enter") btn.click();
   });
 }
 
@@ -288,7 +272,6 @@ function logout() {
   localStorage.removeItem("wt_auth");
   document.getElementById("app").style.display = "none";
   document.getElementById("login-screen").style.display = "flex";
-  document.getElementById("login-pwd").value = "";
   if (qrScanner) {
     try { qrScanner.stop(); } catch(e) {}
     qrScanner = null;
@@ -584,11 +567,19 @@ function renderListTab() {
   const searchInput = document.getElementById("list-search");
   const filterSel = document.getElementById("list-filter");
 
+  // Save current values before cloning (cloneNode resets .value to DOM default)
+  const savedSearch = searchInput.value;
+  const savedFilter = filterSel.value;
+
   // Remove old listeners by cloning
   const newSearch = searchInput.cloneNode(true);
   searchInput.parentNode.replaceChild(newSearch, searchInput);
   const newFilter = filterSel.cloneNode(true);
   filterSel.parentNode.replaceChild(newFilter, filterSel);
+
+  // Restore values after clone
+  newSearch.value = savedSearch;
+  newFilter.value = savedFilter;
 
   newSearch.addEventListener("input", () => renderListCards());
   newFilter.addEventListener("change", () => renderListCards());
