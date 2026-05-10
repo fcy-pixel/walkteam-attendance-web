@@ -60,14 +60,14 @@
 
   <!-- Tab Bar -->
   <div class="tab-bar" id="tab-bar">
-    <button class="tab active" data-tab="scan">📷 掃描點名</button>
-    <button class="tab" data-tab="list">📋 今日名單</button>
+    <button class="tab" data-tab="scan">📷 掃描點名</button>
+    <button class="tab active" data-tab="list">📋 今日名單</button>
     <button class="tab" data-tab="history">📅 歷史紀錄</button>
     <button class="tab" data-tab="settings">⚙️ 設定</button>
   </div>
 
   <!-- ═══ Tab: 掃描點名 ═══ -->
-  <div id="tab-scan" class="tab-content">
+  <div id="tab-scan" class="tab-content" style="display:none">
     <div class="scan-layout">
       <div class="scan-left">
         <div class="section-title">📷 Live QR 掃描</div>
@@ -99,7 +99,7 @@
   </div>
 
   <!-- ═══ Tab: 今日名單 ═══ -->
-  <div id="tab-list" class="tab-content" style="display:none">
+  <div id="tab-list" class="tab-content">
     <div id="list-empty" style="display:none" class="info-box">🗂️ 雲端尚無學生資料，請前往「設定」上傳 CSV 名單。</div>
     <div id="list-content">
       <div class="filter-row">

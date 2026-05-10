@@ -310,7 +310,6 @@ async function initApp() {
     showToast("❌ Firebase 連線失敗", "error");
   }
   hideLoading();
-  initQrScanner();
   initManualSearch();
   document.getElementById("refresh-btn").addEventListener("click", async () => {
     showLoading("重新整理…");
@@ -368,16 +367,22 @@ function updateHeader() {
 // ═══════════════════════════════════════════════════════════════════════════
 // TABS
 // ═══════════════════════════════════════════════════════════════════════════
-let activeTab = "scan";
+let activeTab = "list";
 
 function initTabs() {
   document.querySelectorAll(".tab").forEach(btn => {
     btn.addEventListener("click", () => {
+      const prevTab = activeTab;
       activeTab = btn.dataset.tab;
       document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
       document.getElementById(`tab-${activeTab}`).style.display = "block";
+      if (activeTab === "scan") initQrScanner();
+      if (prevTab === "scan" && activeTab !== "scan" && qrScanner) {
+        try { qrScanner.stop(); } catch(e) {}
+        qrScanner = null;
+      }
       renderCurrentTab();
     });
   });
