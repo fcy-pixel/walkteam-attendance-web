@@ -20,6 +20,8 @@ let db;
 if (CONFIG_READY) {
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
+  // 有 proxy/過濾嘅網絡（學校 WiFi）會令預設 WebChannel 連線間歇性卡死，自動偵測改用 long-polling
+  db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
 }
 
 function showConfigError() {
@@ -56,6 +58,13 @@ let lastScanTs = 0;
 let qrScanner = null;
 let noteEditing = {};
 let csvParsed = null;
+let unsubStudents = null;      // Firestore 實時監聽取消函數
+let unsubToday = null;
+let legacyTodayRecords = {};   // 舊格式（單一大 doc）當日紀錄，升級當日兼容用
+let todayEntries = {};         // 新格式：entries 子集合，一個學生一份 doc
+let boundDate = "";            // 監聽器綁定嘅日期，過午夜自動重新綁
+let uiInited = false;          // 一次性 UI 事件只綁一次（重複登入唔會重複綁）
+const ensuredDates = {};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function hkNow() {
@@ -111,27 +120,119 @@ function hideLoading() {
 // ═══════════════════════════════════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════════════════════════════════
-async function loadStudents() {
-  const snap = await db.collection(colStudents()).get();
-  students = snap.docs.map(d => d.data());
-  students.sort((a, b) => {
-    if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
-    return (parseInt(a.number) || 0) - (parseInt(b.number) || 0);
-  });
-  return students;
+function entriesCol(date) {
+  return db.collection(colRecords()).doc(date).collection("entries");
 }
 
+// 歷史頁靠列出日期主文件搵日期，所以要確保主文件存在。每部裝置每隊每日只寫一次。
+function ensureDateDoc(date) {
+  const key = `${currentTeam}_${date}`;
+  if (ensuredDates[key]) return;
+  ensuredDates[key] = true;
+  db.collection(colRecords()).doc(date)
+    .set({ date: date, timestamp: hkNow().getTime() / 1000 }, { merge: true })
+    .catch(() => { ensuredDates[key] = false; });
+}
+
+// 讀取某日紀錄：兼容舊格式（主文件 records map）+ 新格式（entries 子集合），新格式優先
 async function loadRecords(date) {
-  const snap = await db.collection(colRecords()).doc(date).get();
-  if (snap.exists) {
-    return (snap.data().records || {});
-  }
-  return {};
+  const ref = db.collection(colRecords()).doc(date);
+  const [snap, entriesSnap] = await Promise.all([ref.get(), ref.collection("entries").get()]);
+  const recs = snap.exists ? { ...(snap.data().records || {}) } : {};
+  entriesSnap.docs.forEach(d => { recs[d.id] = { ...(recs[d.id] || {}), ...d.data() }; });
+  return recs;
 }
 
 async function loadDates() {
   const snap = await db.collection(colRecords()).get();
   return snap.docs.map(d => d.id).sort().reverse();
+}
+
+// ── 實時監聽：任何一部裝置點名，其他裝置自動更新 ────────────────────────────
+function stopListeners() {
+  if (unsubStudents) { unsubStudents(); unsubStudents = null; }
+  if (unsubToday) { unsubToday(); unsubToday = null; }
+}
+
+function startListeners() {
+  stopListeners();
+  const td = todayStr();
+  boundDate = td;
+  legacyTodayRecords = {};
+  todayEntries = {};
+
+  unsubStudents = db.collection(colStudents()).onSnapshot(snap => {
+    students = snap.docs.map(d => d.data());
+    students.sort((a, b) => {
+      if (a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
+      return (parseInt(a.number) || 0) - (parseInt(b.number) || 0);
+    });
+    recompute();
+  }, err => {
+    console.error(err);
+    hideLoading();
+    showToast("❌ 學生名單同步失敗", "error");
+  });
+
+  // 舊格式當日紀錄只需讀一次（升級當日早段已點嘅名）
+  db.collection(colRecords()).doc(td).get().then(snap => {
+    legacyTodayRecords = snap.exists ? (snap.data().records || {}) : {};
+    recompute();
+  }).catch(e => console.error(e));
+
+  unsubToday = entriesCol(td).onSnapshot(snap => {
+    todayEntries = {};
+    snap.docs.forEach(d => { todayEntries[d.id] = d.data(); });
+    recompute();
+  }, err => {
+    console.error(err);
+    hideLoading();
+    showToast("❌ 點名紀錄同步失敗", "error");
+  });
+}
+
+function recompute() {
+  records = { ...legacyTodayRecords };
+  for (const [id, rec] of Object.entries(todayEntries)) {
+    records[id] = { ...(records[id] || {}), ...rec };
+  }
+  computed = mergeData(students, records);
+  updateHeader();
+  rerenderPreservingInput();
+  hideLoading();
+}
+
+// 重新渲染當前分頁，但保留正在輸入嘅搜尋框／通報欄內容同游標
+function rerenderPreservingInput() {
+  if (activeTab === "history" || activeTab === "settings") return;
+
+  const act = document.activeElement;
+  const actId = act ? act.id : "";
+  const isText = act && (act.tagName === "INPUT" || act.tagName === "TEXTAREA");
+  const sel = isText ? { val: act.value, start: act.selectionStart, end: act.selectionEnd } : null;
+
+  const openNotes = {};
+  Object.keys(noteEditing).forEach(id => {
+    if (!noteEditing[id]) return;
+    const ta = document.getElementById(`nt_${id}`);
+    if (ta) openNotes[id] = ta.value;
+  });
+
+  renderCurrentTab();
+
+  Object.entries(openNotes).forEach(([id, val]) => {
+    const ta = document.getElementById(`nt_${id}`);
+    if (ta) ta.value = val;
+  });
+
+  if (actId && isText) {
+    const el = document.getElementById(actId);
+    if (el) {
+      el.value = sel.val;
+      el.focus();
+      try { el.setSelectionRange(sel.start, sel.end); } catch (e) {}
+    }
+  }
 }
 
 function mergeData(studs, recs) {
@@ -143,56 +244,41 @@ function mergeData(studs, recs) {
   }));
 }
 
-async function setStatus(student, newStatus) {
+function setStatus(student, newStatus) {
   const td = todayStr();
   const now = hkNow();
-  const data = {
-    date: td,
-    timestamp: now.getTime() / 1000,
-    records: {
-      [student.id]: {
-        status: newStatus,
-        time: newStatus === "present" ? `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}` : null,
-        name: student.name,
-        class: student.class || "",
-        number: student.number || "",
-      }
-    }
-  };
-  await db.collection(colRecords()).doc(td).set(data, { merge: true });
-}
-
-async function setNote(student, note) {
-  const td = todayStr();
-  const now = hkNow();
-  await db.collection(colRecords()).doc(td).set({
-    date: td,
-    timestamp: now.getTime() / 1000,
-    records: {
-      [student.id]: {
-        dailyNote: note,
-        name: student.name,
-        class: student.class || "",
-        number: student.number || "",
-      }
-    }
+  ensureDateDoc(td);
+  return entriesCol(td).doc(student.id).set({
+    status: newStatus,
+    time: newStatus === "present" ? `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}` : null,
+    name: student.name,
+    class: student.class || "",
+    number: student.number || "",
   }, { merge: true });
 }
 
-async function bulkSetSkipped(studentsList) {
+function setNote(student, note) {
   const td = todayStr();
-  const now = hkNow();
-  const recsMap = {};
+  ensureDateDoc(td);
+  return entriesCol(td).doc(student.id).set({
+    dailyNote: note,
+    name: student.name,
+    class: student.class || "",
+    number: student.number || "",
+  }, { merge: true });
+}
+
+function bulkSetSkipped(studentsList) {
+  const td = todayStr();
+  ensureDateDoc(td);
+  const batch = db.batch();
   studentsList.forEach(s => {
-    recsMap[s.id] = {
+    batch.set(entriesCol(td).doc(s.id), {
       status: "skipped", time: null,
       name: s.name, class: s.class || "", number: s.number || "",
-    };
+    }, { merge: true });
   });
-  await db.collection(colRecords()).doc(td).set(
-    { date: td, timestamp: now.getTime() / 1000, records: recsMap },
-    { merge: true }
-  );
+  return batch.commit();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -269,6 +355,7 @@ function initLogin() {
 
 function logout() {
   authenticated = false;
+  stopListeners();
   localStorage.removeItem("wt_auth");
   document.getElementById("app").style.display = "none";
   document.getElementById("login-screen").style.display = "flex";
@@ -281,33 +368,22 @@ function logout() {
 // ═══════════════════════════════════════════════════════════════════════════
 // APP INIT
 // ═══════════════════════════════════════════════════════════════════════════
-async function initApp() {
-  startClock();
-  initTabs();
-  initSettingsEvents();
-  showLoading("載入資料中…");
-  try {
-    await refreshData();
-  } catch(e) {
-    console.error(e);
-    showToast("❌ Firebase 連線失敗", "error");
+function initApp() {
+  if (!uiInited) {
+    uiInited = true;
+    startClock();
+    initTabs();
+    initSettingsEvents();
+    initManualSearch();
+    document.getElementById("refresh-btn").addEventListener("click", () => {
+      showLoading("重新整理…");
+      startListeners();
+    });
   }
-  hideLoading();
-  initManualSearch();
-  document.getElementById("refresh-btn").addEventListener("click", async () => {
-    showLoading("重新整理…");
-    await refreshData();
-    hideLoading();
-    showToast("✅ 已更新");
-  });
-}
-
-async function refreshData() {
-  const td = todayStr();
-  [students, records] = await Promise.all([loadStudents(), loadRecords(td)]);
-  computed = mergeData(students, records);
-  updateHeader();
-  renderCurrentTab();
+  showLoading("載入資料中…");
+  // 保險：就算連線完全失敗，spinner 最多顯示 12 秒
+  setTimeout(hideLoading, 12000);
+  startListeners();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -319,6 +395,8 @@ function startClock() {
     const pad = n => String(n).padStart(2, '0');
     document.getElementById("hkt-clock").textContent =
       `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    // 過咗午夜自動切換去新一日嘅紀錄
+    if (boundDate && todayStr() !== boundDate) startListeners();
   }
   tick();
   setInterval(tick, 1000);
@@ -445,11 +523,11 @@ async function processQr(name) {
     extraMsg = "（已更新不跟歸程隊→已到）";
   }
 
-  await setStatus(match, "present");
-  records = await loadRecords(todayStr());
-  computed = mergeData(students, records);
-  updateHeader();
-  renderScanTab(false);
+  // 背景寫入，UI 由實時監聽即時更新（本地寫入會即時觸發 snapshot，離線都會即刻變綠）
+  setStatus(match, "present").catch(e => {
+    console.error(e);
+    showToast(`❌ ${match.name} 報到儲存失敗，請重試`, "error");
+  });
 
   const actsText = todayActs(match).join("　");
   const actsRow = actsText ? `<div style="font-size:.78rem;color:#7c3aed;margin-top:3px;">🏃 ${escHtml(actsText)}</div>` : "";
@@ -511,25 +589,21 @@ function renderManualResults() {
   }).join("");
 }
 
-window.manualToggle = async function(id, newStatus) {
+window.manualToggle = function(id, newStatus) {
   const s = computed.find(x => x.id === id);
   if (!s) return;
-  showLoading();
-  await setStatus(s, newStatus);
-  records = await loadRecords(todayStr());
-  computed = mergeData(students, records);
-  updateHeader();
-  renderManualResults();
-  renderScanTab(false);
-  hideLoading();
+  setStatus(s, newStatus).catch(e => {
+    console.error(e);
+    showToast(`❌ ${s.name} 儲存失敗，請重試`, "error");
+  });
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SCAN TAB RENDER
 // ═══════════════════════════════════════════════════════════════════════════
-function renderScanTab(clearResult = true) {
-  if (clearResult) {} // keep scan result
+function renderScanTab() {
   renderRecentCheckins();
+  renderManualResults();
 }
 
 function renderRecentCheckins() {
@@ -602,16 +676,13 @@ function renderActivityAlert() {
     <button class="btn-primary full-width" onclick="bulkSkipActivity()">🚫 一鍵標記為不跟歸程隊（${actAbsent.length} 人）</button>`;
 }
 
-window.bulkSkipActivity = async function() {
+window.bulkSkipActivity = function() {
   const actAbsent = computed.filter(s => todayActs(s).length > 0 && s.status === "absent");
   if (!actAbsent.length) return;
-  showLoading("標記中…");
-  await bulkSetSkipped(actAbsent);
-  records = await loadRecords(todayStr());
-  computed = mergeData(students, records);
-  updateHeader();
-  renderListTab();
-  hideLoading();
+  bulkSetSkipped(actAbsent).catch(e => {
+    console.error(e);
+    showToast("❌ 標記失敗，請重試", "error");
+  });
   showToast(`✅ 已標記 ${actAbsent.length} 人不跟歸程隊`, "success");
 };
 
@@ -691,16 +762,13 @@ function renderStudentCard(s, prefix) {
 
 function esc(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, "&quot;"); }
 
-window.cardAction = async function(id, newStatus) {
+window.cardAction = function(id, newStatus) {
   const s = computed.find(x => x.id === id);
   if (!s) return;
-  showLoading();
-  await setStatus(s, newStatus);
-  records = await loadRecords(todayStr());
-  computed = mergeData(students, records);
-  updateHeader();
-  renderCurrentTab();
-  hideLoading();
+  setStatus(s, newStatus).catch(e => {
+    console.error(e);
+    showToast(`❌ ${s.name} 儲存失敗，請重試`, "error");
+  });
 };
 
 window.toggleNote = function(id) {
@@ -708,19 +776,17 @@ window.toggleNote = function(id) {
   renderCurrentTab();
 };
 
-window.saveNote = async function(id) {
+window.saveNote = function(id) {
   const ta = document.getElementById(`nt_${id}`);
   const val = ta ? ta.value.trim() : "";
   const s = computed.find(x => x.id === id);
   if (!s) return;
-  showLoading();
-  await setNote(s, val);
   noteEditing[id] = false;
-  records = await loadRecords(todayStr());
-  computed = mergeData(students, records);
-  updateHeader();
+  setNote(s, val).catch(e => {
+    console.error(e);
+    showToast("❌ 通報儲存失敗，請重試", "error");
+  });
   renderCurrentTab();
-  hideLoading();
   showToast("✅ 已儲存通報", "success");
 };
 
@@ -738,9 +804,14 @@ let historyLoaded = false;
 async function renderHistoryTab() {
   if (!historyLoaded) {
     showLoading("載入歷史紀錄…");
-    historyDates = await loadDates();
-    historyLoaded = false; // will be set when date selected
-    hideLoading();
+    try {
+      historyDates = await loadDates();
+    } catch(e) {
+      console.error(e);
+      showToast("❌ 讀取歷史紀錄失敗", "error");
+    } finally {
+      hideLoading();
+    }
   }
 
   if (!historyDates.length) {
@@ -771,10 +842,16 @@ async function renderHistoryTab() {
     const date = document.getElementById("history-date").value;
     if (!date) return;
     showLoading();
-    const hRec = await loadRecords(date);
-    const hData = buildHistoryData(hRec);
-    hideLoading();
-    downloadCsv(makeCsv(hData, date), `歸程隊${currentTeam}隊歷史_${date}.csv`);
+    try {
+      const hRec = await loadRecords(date);
+      const hData = buildHistoryData(hRec);
+      downloadCsv(makeCsv(hData, date), `歸程隊${currentTeam}隊歷史_${date}.csv`);
+    } catch(e) {
+      console.error(e);
+      showToast("❌ 匯出失敗", "error");
+    } finally {
+      hideLoading();
+    }
   });
 
   await renderHistoryCards();
@@ -806,8 +883,16 @@ async function renderHistoryCards() {
   if (!date) return;
 
   showLoading();
-  const hRec = await loadRecords(date);
-  hideLoading();
+  let hRec;
+  try {
+    hRec = await loadRecords(date);
+  } catch(e) {
+    console.error(e);
+    showToast("❌ 讀取失敗", "error");
+    return;
+  } finally {
+    hideLoading();
+  }
 
   const hData = buildHistoryData(hRec);
   const hPres = hData.filter(s => s.status === "present").length;
@@ -981,22 +1066,26 @@ async function confirmCsvUpload() {
   if (!csvParsed || !csvParsed.length) return;
   showLoading("上傳中…");
   try {
-    const batch = db.batch();
     const snap = await db.collection(colStudents()).get();
-    snap.docs.forEach(doc => batch.delete(doc.ref));
-    csvParsed.forEach(s => {
-      batch.set(db.collection(colStudents()).doc(s.id), s);
-    });
-    await batch.commit();
-    await refreshData();
+    // Firestore batch 上限 500 個操作，分批 commit
+    const ops = [];
+    snap.docs.forEach(doc => ops.push(b => b.delete(doc.ref)));
+    csvParsed.forEach(s => ops.push(b => b.set(db.collection(colStudents()).doc(s.id), s)));
+    for (let i = 0; i < ops.length; i += 400) {
+      const batch = db.batch();
+      ops.slice(i, i + 400).forEach(op => op(batch));
+      await batch.commit();
+    }
+    // 學生名單由實時監聽自動更新，毋須手動重讀
     showToast(`✅ 已上傳 ${csvParsed.length} 筆學生資料！`, "success");
     csvParsed = null;
     document.getElementById("csv-preview").style.display = "none";
     document.getElementById("csv-upload").value = "";
   } catch(e) {
     showToast("❌ 上傳失敗：" + e.message, "error");
+  } finally {
+    hideLoading();
   }
-  hideLoading();
 }
 
 async function fixTimezone() {
