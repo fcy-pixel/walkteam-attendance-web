@@ -58,6 +58,7 @@ let noteEditing = {};
 let csvParsed = null;
 let absencePdfFile = null;
 let aiAttendanceAnalysis = null;
+let aiAttendanceRoster = [];
 let unsubStudents = null;      // Firestore 實時監聽取消函數
 let unsubToday = null;
 let legacyTodayRecords = {};   // 舊格式（單一大 doc）當日紀錄，升級當日兼容用
@@ -85,6 +86,8 @@ function todayActs(student) {
 function colStudents() { return `students_${currentTeam}`; }
 function colRecords() { return `daily_records_${currentTeam}`; }
 function teamLabel() { return `歸程隊${TEAMS[currentTeam] || currentTeam}`; }
+function colStudentsFor(team) { return `students_${team}`; }
+function colRecordsFor(team) { return `daily_records_${team}`; }
 
 function escHtml(s) {
   const d = document.createElement("div");
@@ -121,15 +124,23 @@ function hideLoading() {
 // DATA
 // ═══════════════════════════════════════════════════════════════════════════
 function entriesCol(date) {
-  return db.collection(colRecords()).doc(date).collection("entries");
+  return entriesColFor(currentTeam, date);
+}
+
+function entriesColFor(team, date) {
+  return db.collection(colRecordsFor(team)).doc(date).collection("entries");
 }
 
 // 歷史頁靠列出日期主文件搵日期，所以要確保主文件存在。每部裝置每隊每日只寫一次。
 function ensureDateDoc(date) {
-  const key = `${currentTeam}_${date}`;
+  ensureDateDocFor(currentTeam, date);
+}
+
+function ensureDateDocFor(team, date) {
+  const key = `${team}_${date}`;
   if (ensuredDates[key]) return;
   ensuredDates[key] = true;
-  db.collection(colRecords()).doc(date)
+  db.collection(colRecordsFor(team)).doc(date)
     .set({ date: date, timestamp: hkNow().getTime() / 1000 }, { merge: true })
     .catch(() => { ensuredDates[key] = false; });
 }
@@ -283,19 +294,26 @@ function bulkSetSkipped(studentsList) {
 
 async function applyAiAttendance(recordsToApply) {
   const td = todayStr();
-  ensureDateDoc(td);
-  const ops = [];
+  const teams = new Set(recordsToApply.map(result => result.team).filter(team => TEAMS[team]));
+  teams.forEach(team => ensureDateDocFor(team, td));
 
-  recordsToApply.forEach(result => {
-    const student = computed.find(s => s.id === result.studentId);
-    if (!student) return;
-    const oldNote = (student.dailyNote || "").trim();
+  const prepared = await Promise.all(recordsToApply.map(async result => {
+    const student = aiAttendanceRoster.find(s => s.team === result.team && s.id === result.studentId);
+    if (!student || !TEAMS[result.team]) return null;
+    const ref = entriesColFor(result.team, td).doc(student.id);
+    const snap = await ref.get();
+    const oldNote = snap.exists ? String(snap.data().dailyNote || "").trim() : "";
     const newNote = (result.note || "").trim();
     const dailyNote = oldNote && newNote && !oldNote.includes(newNote)
       ? `${oldNote}；${newNote}`
       : (oldNote || newNote);
+    return { result, student, ref, dailyNote };
+  }));
 
-    ops.push(batch => batch.set(entriesCol(td).doc(student.id), {
+  const ops = [];
+
+  prepared.filter(Boolean).forEach(({ result, student, ref, dailyNote }) => {
+    ops.push(batch => batch.set(ref, {
       status: "skipped",
       time: null,
       dailyNote,
@@ -842,6 +860,7 @@ function initSettingsEvents() {
 
 function resetAiAttendancePreview() {
   aiAttendanceAnalysis = null;
+  aiAttendanceRoster = [];
   const preview = document.getElementById("ai-attendance-preview");
   preview.style.display = "none";
   preview.innerHTML = "";
@@ -868,7 +887,16 @@ function handleAbsencePdfSelection(e) {
   const info = document.getElementById("absence-pdf-info");
   info.textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
   info.style.display = "block";
-  document.getElementById("analyze-absence-btn").disabled = !students.length;
+  document.getElementById("analyze-absence-btn").disabled = false;
+}
+
+async function loadAllTeamStudents() {
+  const teams = ["A", "B", "C"];
+  const snapshots = await Promise.all(teams.map(team => db.collection(colStudentsFor(team)).get()));
+  return snapshots.flatMap((snapshot, index) => {
+    const team = teams[index];
+    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, team }));
+  });
 }
 
 let pdfJsLoadPromise = null;
@@ -935,18 +963,16 @@ async function extractPdfText(file) {
 
 async function analyzeAbsencePdf() {
   if (!absencePdfFile) return;
-  if (!students.length) {
-    showToast("本隊尚未有學生名單", "error");
-    return;
-  }
 
   const button = document.getElementById("analyze-absence-btn");
   button.disabled = true;
-  showLoading("讀取 PDF 及進行 AI 分析…");
+  showLoading("讀取 A、B、C 三隊名單及進行 AI 分析…");
   resetAiAttendancePreview();
 
   try {
     const documentText = await extractPdfText(absencePdfFile);
+    aiAttendanceRoster = await loadAllTeamStudents();
+    if (!aiAttendanceRoster.length) throw new Error("A、B、C 三隊尚未有學生名單。");
     const response = await fetch("/api/analyze-attendance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -954,8 +980,9 @@ async function analyzeAbsencePdf() {
         fileName: absencePdfFile.name,
         documentText,
         targetDate: todayStr(),
-        team: currentTeam,
-        roster: computed.map(s => ({
+        team: "ALL",
+        roster: aiAttendanceRoster.map(s => ({
+          team: s.team,
           id: s.id,
           name: s.name,
           class: s.class || "",
@@ -966,9 +993,9 @@ async function analyzeAbsencePdf() {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "AI 分析暫時失敗，請稍後重試。");
 
-    const knownIds = new Set(computed.map(s => s.id));
+    const knownIds = new Set(aiAttendanceRoster.map(s => `${s.team}\u0000${s.id}`));
     data.records = Array.isArray(data.records)
-      ? data.records.filter(r => knownIds.has(r.studentId))
+      ? data.records.filter(r => knownIds.has(`${r.team}\u0000${r.studentId}`))
       : [];
     aiAttendanceAnalysis = data;
     renderAiAttendancePreview();
@@ -977,7 +1004,7 @@ async function analyzeAbsencePdf() {
     showToast(e.message || "AI 分析失敗", "error");
   } finally {
     hideLoading();
-    button.disabled = !absencePdfFile || !students.length;
+    button.disabled = !absencePdfFile;
   }
 }
 
@@ -986,9 +1013,13 @@ function renderAiAttendancePreview() {
   const analysis = aiAttendanceAnalysis || {};
   const results = Array.isArray(analysis.records) ? analysis.records : [];
   const unmatched = Array.isArray(analysis.unmatched) ? analysis.unmatched : [];
+  const counts = ["A", "B", "C"].map(team => ({
+    team,
+    count: results.filter(result => result.team === team).length,
+  }));
 
   const resultRows = results.map((result, index) => {
-    const student = computed.find(s => s.id === result.studentId);
+    const student = aiAttendanceRoster.find(s => s.team === result.team && s.id === result.studentId);
     if (!student) return "";
     const typeLabel = result.type === "early_leave" ? "早退" : "缺席";
     const confidenceLabel = result.confidence === "low" ? "需覆核" : (result.confidence === "medium" ? "中等信心" : "已配對");
@@ -999,6 +1030,7 @@ function renderAiAttendancePreview() {
         <span class="ai-result-main">
           <span class="ai-result-heading">
             <strong>${escHtml(student.name)}</strong>
+            <span class="ai-team-badge">${escHtml(result.team)}隊</span>
             <span>${escHtml(student.class || "")} ${escHtml(student.number || "")}號</span>
             <span class="ai-type-badge">${typeLabel}</span>
             <span class="ai-confidence">${confidenceLabel}</span>
@@ -1010,12 +1042,13 @@ function renderAiAttendancePreview() {
 
   preview.innerHTML = `
     <div class="ai-preview-head">
-      <strong>分析結果：${results.length} 名本隊學生</strong>
+      <strong>三隊分析結果：共 ${results.length} 人</strong>
       <span>套用至今日 ${todayStr()}</span>
     </div>
-    ${results.length ? `<div class="ai-result-list">${resultRows}</div>` : `<div class="info-box">未找到屬於本隊的學生，未有任何資料被更改。</div>`}
+    <div class="ai-team-summary">${counts.map(item => `<span>${item.team}隊 <strong>${item.count}</strong> 人</span>`).join("")}</div>
+    ${results.length ? `<div class="ai-result-list">${resultRows}</div>` : `<div class="info-box">未找到屬於 A、B、C 隊的學生，未有任何資料被更改。</div>`}
     ${unmatched.length ? `<div class="ai-unmatched"><strong>未能配對（${unmatched.length}）</strong><div>${unmatched.map(item => escHtml(typeof item === "string" ? item : (item.text || item.name || "未知資料"))).join("、")}</div></div>` : ""}
-    ${results.length ? `<button class="btn-primary full-width" id="apply-ai-attendance-btn">套用已選學生至今日通報</button>` : ""}`;
+    ${results.length ? `<button class="btn-primary full-width" id="apply-ai-attendance-btn">一次過套用至 A、B、C 隊</button>` : ""}`;
   preview.style.display = "block";
 
   const applyButton = document.getElementById("apply-ai-attendance-btn");
@@ -1035,7 +1068,10 @@ async function confirmAiAttendanceApply() {
   showLoading("套用今日通報…");
   try {
     await applyAiAttendance(selected);
-    showToast(`已更新 ${selected.length} 名學生的今日通報`, "success");
+    const teamText = ["A", "B", "C"]
+      .map(team => `${team}隊 ${selected.filter(result => result.team === team).length} 人`)
+      .join("、");
+    showToast(`已更新 ${selected.length} 人（${teamText}）`, "success");
     resetAiAttendancePreview();
     absencePdfFile = null;
     document.getElementById("absence-pdf-upload").value = "";
