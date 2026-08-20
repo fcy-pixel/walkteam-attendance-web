@@ -27,7 +27,7 @@ if (CONFIG_READY) {
 function showConfigError() {
   document.getElementById("login-screen").innerHTML = `
     <div class="login-box" style="max-width:500px;">
-      <div class="login-icon">WT</div>
+      <div class="login-icon"><img src="school-logo.png" alt="基慈學校校章"></div>
       <h2>需要設定 Firebase</h2>
       <p style="color:#64748b;font-size:.85rem;margin:8px 0 16px;line-height:1.6;text-align:left;">
         請到 <a href="https://console.firebase.google.com/project/walkteam-6ffb5/settings/general" target="_blank">Firebase Console</a> 完成以下步驟：<br><br>
