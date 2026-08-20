@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 
@@ -58,42 +57,9 @@
 
   <!-- Tab Bar -->
   <div class="tab-bar" id="tab-bar">
-    <button class="tab" data-tab="scan">📷 掃描點名</button>
     <button class="tab active" data-tab="list">📋 今日名單</button>
     <button class="tab" data-tab="history">📅 歷史紀錄</button>
     <button class="tab" data-tab="settings">⚙️ 設定</button>
-  </div>
-
-  <!-- ═══ Tab: 掃描點名 ═══ -->
-  <div id="tab-scan" class="tab-content" style="display:none">
-    <div class="scan-layout">
-      <div class="scan-left">
-        <div class="section-title">📷 Live QR 掃描</div>
-        <div class="qr-wrap">
-          <div id="qr-loading" class="qr-loading">
-            <div class="spinner"></div>
-            <span>開啟相機中…</span>
-          </div>
-          <div id="qr-reader" style="display:none"></div>
-          <div id="qr-overlay" class="qr-overlay" style="display:none">
-            <div class="corner-box"><i></i><div class="scan-line"></div></div>
-          </div>
-          <div class="qr-status" id="qr-status">
-            <div class="live-dot"></div>
-            <span id="qr-status-text">對準學生 QR 碼，自動掃描點名</span>
-          </div>
-        </div>
-        <div id="scan-result"></div>
-      </div>
-      <div class="scan-right">
-        <div class="section-title">🔍 手動搜尋點名</div>
-        <input type="text" id="manual-search" placeholder="姓名 / 班級+號 …" class="input-field">
-        <div id="manual-results"></div>
-        <div style="height:14px"></div>
-        <div class="section-title">🕐 最近報到</div>
-        <div id="recent-checkins"></div>
-      </div>
-    </div>
   </div>
 
   <!-- ═══ Tab: 今日名單 ═══ -->
@@ -139,7 +105,7 @@
 
     <hr>
     <h3>☁️ 上傳 / 更新雲端名單</h3>
-    <p class="caption">欄位：班級、學號、姓名、跟隨兄/姊回家、星期一～五。<strong>QR 碼內容為學生姓名。</strong></p>
+    <p class="caption">欄位：班級、學號、姓名、跟隨兄/姊回家、星期一～五。</p>
     <button class="btn-outline full-width" id="download-template-btn">📄 下載名單範本 (CSV)</button>
     <div class="upload-area" id="upload-area">
       <input type="file" id="csv-upload" accept=".csv" style="display:none">

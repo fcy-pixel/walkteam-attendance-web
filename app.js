@@ -54,8 +54,6 @@ let authenticated = localStorage.getItem("wt_auth") === "1";
 let students = [];
 let records = {};
 let computed = [];
-let lastScanTs = 0;
-let qrScanner = null;
 let noteEditing = {};
 let csvParsed = null;
 let unsubStudents = null;      // Firestore 實時監聽取消函數
@@ -359,10 +357,6 @@ function logout() {
   localStorage.removeItem("wt_auth");
   document.getElementById("app").style.display = "none";
   document.getElementById("login-screen").style.display = "flex";
-  if (qrScanner) {
-    try { qrScanner.stop(); } catch(e) {}
-    qrScanner = null;
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -374,7 +368,6 @@ function initApp() {
     startClock();
     initTabs();
     initSettingsEvents();
-    initManualSearch();
     document.getElementById("refresh-btn").addEventListener("click", () => {
       showLoading("重新整理…");
       startListeners();
@@ -433,17 +426,11 @@ let activeTab = "list";
 function initTabs() {
   document.querySelectorAll(".tab").forEach(btn => {
     btn.addEventListener("click", () => {
-      const prevTab = activeTab;
       activeTab = btn.dataset.tab;
       document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
       document.getElementById(`tab-${activeTab}`).style.display = "block";
-      if (activeTab === "scan") initQrScanner();
-      if (prevTab === "scan" && activeTab !== "scan" && qrScanner) {
-        try { qrScanner.stop(); } catch(e) {}
-        qrScanner = null;
-      }
       renderCurrentTab();
     });
   });
@@ -451,179 +438,10 @@ function initTabs() {
 
 function renderCurrentTab() {
   switch(activeTab) {
-    case "scan": renderScanTab(); break;
     case "list": renderListTab(); break;
     case "history": renderHistoryTab(); break;
     case "settings": break;
   }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// QR SCANNER
-// ═══════════════════════════════════════════════════════════════════════════
-function initQrScanner() {
-  if (qrScanner) return;
-  const reader = document.getElementById("qr-reader");
-  qrScanner = new Html5Qrcode("qr-reader");
-
-  qrScanner.start(
-    { facingMode: "environment" },
-    { fps: 15, qrbox: { width: 200, height: 200 }, aspectRatio: 1.333 },
-    onQrDecoded,
-    () => {}
-  ).then(() => {
-    document.getElementById("qr-loading").style.display = "none";
-    reader.style.display = "block";
-    document.getElementById("qr-overlay").style.display = "flex";
-  }).catch(err => {
-    document.getElementById("qr-loading").innerHTML =
-      `<div style="color:#f87171;text-align:center;padding:16px;font-size:13px;">
-        ⚠️ 無法開啟相機<br><small style="opacity:.7;margin-top:6px;display:block">${escHtml(String(err))}</small>
-      </div>`;
-  });
-}
-
-async function onQrDecoded(text) {
-  const now = Date.now();
-  if (text === onQrDecoded._lastText && now - onQrDecoded._lastTs < 3000) return;
-  onQrDecoded._lastText = text;
-  onQrDecoded._lastTs = now;
-
-  const bar = document.getElementById("qr-status");
-  const barTxt = document.getElementById("qr-status-text");
-  bar.className = "qr-status ok";
-  barTxt.textContent = "✅  " + text;
-  setTimeout(() => {
-    bar.className = "qr-status";
-    barTxt.textContent = "對準學生 QR 碼，自動掃描點名";
-  }, 2000);
-
-  await processQr(text.trim());
-}
-onQrDecoded._lastText = "";
-onQrDecoded._lastTs = 0;
-
-async function processQr(name) {
-  const match = computed.find(s => s.name === name || s.id === name);
-  const resultDiv = document.getElementById("scan-result");
-
-  if (!match) {
-    resultDiv.innerHTML = `<div class="scan-fail"><div style="font-weight:700;color:#dc2626;">⚠️ 找不到學生：${escHtml(name)}</div></div>`;
-    return;
-  }
-
-  if (match.status === "present") {
-    resultDiv.innerHTML = `<div class="scan-fail" style="background:#eff6ff;border-color:#93c5fd;">
-      <div style="font-weight:700;color:#2563eb;">ℹ️ ${escHtml(match.name)} 已報到（${escHtml(match.time)}）</div></div>`;
-    return;
-  }
-
-  let extraMsg = "";
-  if (match.status === "skipped") {
-    extraMsg = "（已更新不跟歸程隊→已到）";
-  }
-
-  // 背景寫入，UI 由實時監聽即時更新（本地寫入會即時觸發 snapshot，離線都會即刻變綠）
-  setStatus(match, "present").catch(e => {
-    console.error(e);
-    showToast(`❌ ${match.name} 報到儲存失敗，請重試`, "error");
-  });
-
-  const actsText = todayActs(match).join("　");
-  const actsRow = actsText ? `<div style="font-size:.78rem;color:#7c3aed;margin-top:3px;">🏃 ${escHtml(actsText)}</div>` : "";
-  const noteRow = match.dailyNote ?
-    `<div style="font-size:.78rem;color:#b91c1c;background:#fef2f2;border-radius:6px;padding:3px 8px;margin-top:4px;">📢 ${escHtml(match.dailyNote)}</div>` : "";
-
-  const now = hkNow();
-  resultDiv.innerHTML = `
-    <div class="scan-success">
-      <div style="font-size:.72rem;color:#16a34a;font-weight:700;letter-spacing:.5px;margin-bottom:6px;">✅  SCANNED</div>
-      <div style="font-size:1.4rem;font-weight:800;color:#14532d;">${escHtml(match.name)}</div>
-      <div style="font-size:.82rem;color:#166534;margin-top:2px;">${escHtml(match.class||"")}　${escHtml(match.number||"")}號</div>
-      ${actsRow}${noteRow}
-      <div style="font-size:.75rem;color:#16a34a;margin-top:6px;opacity:.8;">
-        ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 報到成功${extraMsg}
-      </div>
-    </div>`;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MANUAL SEARCH
-// ═══════════════════════════════════════════════════════════════════════════
-function initManualSearch() {
-  const input = document.getElementById("manual-search");
-  input.addEventListener("input", () => renderManualResults());
-}
-
-function renderManualResults() {
-  const q = (document.getElementById("manual-search").value || "").trim().toLowerCase();
-  const div = document.getElementById("manual-results");
-  if (!q) { div.innerHTML = ""; return; }
-
-  const hits = computed.filter(s =>
-    s.name.toLowerCase().includes(q) ||
-    (s.class || "").toLowerCase().includes(q) ||
-    String(s.number || "") === q ||
-    ((s.class || "").toLowerCase() + String(s.number || "")) === q
-  ).slice(0, 8);
-
-  if (!hits.length) {
-    div.innerHTML = '<div style="font-size:.82rem;color:#64748b;padding:8px 0;">❌ 找不到符合的學生</div>';
-    return;
-  }
-
-  div.innerHTML = hits.map(m => {
-    const isP = m.status === "present";
-    const timeTag = isP ? `<span class="mr-time">✅ ${escHtml(m.time)}</span>` : "";
-    const cls = isP ? "present" : "absent";
-    const btnLabel = isP ? "↩️ 取消" : "✅ 報到";
-    const btnClass = isP ? "btn-secondary" : "btn-primary";
-    return `
-      <div class="manual-result ${cls}">
-        <span style="font-weight:700;">${escHtml(m.name)}</span>
-        <span style="font-size:.8rem;color:#64748b;margin-left:8px;">${escHtml(m.class||"")} ${escHtml(m.number||"")}號</span>
-        ${timeTag}
-      </div>
-      <button class="${btnClass} full-width" style="margin-bottom:6px;"
-              onclick="manualToggle('${m.id.replace(/'/g,"\\'")}', '${isP ? "absent" : "present"}')">${btnLabel}</button>`;
-  }).join("");
-}
-
-window.manualToggle = function(id, newStatus) {
-  const s = computed.find(x => x.id === id);
-  if (!s) return;
-  setStatus(s, newStatus).catch(e => {
-    console.error(e);
-    showToast(`❌ ${s.name} 儲存失敗，請重試`, "error");
-  });
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SCAN TAB RENDER
-// ═══════════════════════════════════════════════════════════════════════════
-function renderScanTab() {
-  renderRecentCheckins();
-  renderManualResults();
-}
-
-function renderRecentCheckins() {
-  const recent = computed
-    .filter(s => s.status === "present" && s.time)
-    .sort((a, b) => (b.time || "").localeCompare(a.time || ""))
-    .slice(0, 8);
-
-  const div = document.getElementById("recent-checkins");
-  if (!recent.length) {
-    div.innerHTML = '<div style="font-size:.82rem;color:#64748b;">暫無報到紀錄</div>';
-    return;
-  }
-  div.innerHTML = recent.map(s => `
-    <div class="recent-item">
-      <span class="recent-name">${escHtml(s.name)}</span>
-      <span class="recent-class">${escHtml(s.class||"")} ${escHtml(s.number||"")}號</span>
-      <span class="recent-time">🕐 ${escHtml(s.time)}</span>
-    </div>
-  `).join("");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

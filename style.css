@@ -150,86 +150,12 @@ body {
   padding: 12px 16px; font-size: .88rem; color: #1e40af; margin-bottom: 10px;
 }
 
-/* ═══ Scan Tab Layout ═══ */
-.scan-layout { display: flex; gap: 24px; }
-.scan-left, .scan-right { flex: 1; min-width: 0; }
-@media (max-width: 700px) {
-  .scan-layout { flex-direction: column; }
-}
-
-/* ═══ QR Scanner ═══ */
-.qr-wrap {
-  position: relative; background: #0f172a; border-radius: 14px;
-  overflow: hidden; margin-bottom: 10px;
-}
-.qr-loading {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  height: 300px; gap: 14px; color: #94a3b8;
-}
 .spinner {
   width: 44px; height: 44px; border: 3px solid #1e293b;
   border-top-color: #3b82f6; border-radius: 50%;
   animation: spin .7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-#qr-reader { width: 100%; }
-#qr-reader video { width: 100% !important; height: auto !important; display: block !important; }
-#qr-reader__dashboard { display: none !important; }
-#qr-reader__scan_region img { display: none !important; }
-#qr-reader__scan_region { position: relative; }
-
-.qr-overlay {
-  position: absolute; top: 0; left: 0; right: 0; bottom: 40px;
-  pointer-events: none; display: flex; align-items: center; justify-content: center;
-}
-.corner-box { width: 200px; height: 200px; position: relative; }
-.corner-box::before, .corner-box::after,
-.corner-box > i::before, .corner-box > i::after {
-  content: ''; position: absolute; width: 28px; height: 28px;
-  border-color: #38bdf8; border-style: solid;
-}
-.corner-box::before  { top:0; left:0; border-width:3px 0 0 3px; border-radius:4px 0 0 0; }
-.corner-box::after   { top:0; right:0; border-width:3px 3px 0 0; border-radius:0 4px 0 0; }
-.corner-box > i::before { bottom:0; left:0; border-width:0 0 3px 3px; border-radius:0 0 0 4px; }
-.corner-box > i::after  { bottom:0; right:0; border-width:0 3px 3px 0; border-radius:0 0 4px 0; }
-.scan-line {
-  position: absolute; left: 4px; right: 4px; height: 2px;
-  background: linear-gradient(90deg, transparent 0%, #38bdf8 40%, #818cf8 60%, transparent 100%);
-  box-shadow: 0 0 8px #38bdf8; animation: slide 2s ease-in-out infinite; top: 0;
-}
-@keyframes slide {
-  0% { top:4px; opacity:0; } 10% { opacity:1; } 90% { opacity:1; }
-  100% { top:calc(100% - 4px); opacity:0; }
-}
-
-.qr-status {
-  background: rgba(15,23,42,.92); color: #e2e8f0; padding: 10px 16px;
-  font-size: 13px; font-weight: 500; display: flex; align-items: center;
-  gap: 8px; min-height: 40px; backdrop-filter: blur(8px);
-  border-top: 1px solid rgba(255,255,255,.06);
-}
-.qr-status.ok { background: rgba(22,163,74,.92); animation: flashIn .25s ease; }
-.qr-status.err { background: rgba(220,38,38,.88); }
-@keyframes flashIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
-
-.live-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #22d3ee;
-  animation: blink 1.4s ease infinite; flex-shrink: 0;
-}
-@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
-
-/* ═══ Scan Result Card ═══ */
-.scan-success {
-  background: linear-gradient(135deg,#f0fdf4,#dcfce7);
-  border: 1.5px solid #86efac; border-radius: 14px;
-  padding: 14px 16px; margin-top: 10px;
-  box-shadow: 0 3px 12px rgba(22,163,74,.15);
-}
-.scan-fail {
-  background: #fef2f2; border: 1.5px solid #fca5a5;
-  border-radius: 14px; padding: 14px 16px; margin-top: 10px;
-}
 
 /* ═══ Student Card ═══ */
 .student-card {
@@ -324,24 +250,6 @@ body {
   padding: 8px 14px; margin-bottom: 3px;
 }
 .history-card.dim { opacity: .5; }
-
-/* ═══ Recent Checkin ═══ */
-.recent-item {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 7px 12px; background: white; border-radius: 9px;
-  margin-bottom: 3px; border: 1px solid #e2e8f0;
-}
-.recent-name { font-weight: 700; font-size: .88rem; }
-.recent-class { font-size: .75rem; color: #64748b; }
-.recent-time { font-size: .75rem; color: #16a34a; font-weight: 600; }
-
-/* ═══ Manual Search Result ═══ */
-.manual-result {
-  border-radius: 10px; padding: 8px 12px; margin-bottom: 4px; border: 1px solid;
-}
-.manual-result.present { background: #f0fdf4; border-color: #bbf7d0; }
-.manual-result.absent  { background: white; border-color: #e2e8f0; }
-.manual-result .mr-time { float: right; font-size: .75rem; color: #16a34a; }
 
 /* ═══ Settings ═══ */
 #tab-settings h3 { margin: 16px 0 10px; color: #1e293b; }
