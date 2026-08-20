@@ -115,6 +115,18 @@
     </div>
 
     <hr>
+    <h3>AI 缺席及早退分析</h3>
+    <p class="caption">上載每日缺席／早退 PDF，系統會用 Qwen International 比對本隊學生。確認結果後，才會填入今日通報並標記為不跟歸程隊。</p>
+    <div class="privacy-note">PDF 只會在這部裝置抽取文字；原 PDF 不會上傳。抽取的文字及本隊學生姓名會傳送至 Qwen 作分析。</div>
+    <div class="upload-area">
+      <input type="file" id="absence-pdf-upload" accept="application/pdf,.pdf" style="display:none">
+      <button class="btn-outline full-width" id="choose-absence-pdf-btn">選擇每日缺席／早退 PDF</button>
+    </div>
+    <div id="absence-pdf-info" class="file-info" style="display:none"></div>
+    <button class="btn-primary full-width ai-analyze-btn" id="analyze-absence-btn" disabled>開始 AI 分析</button>
+    <div id="ai-attendance-preview" style="display:none"></div>
+
+    <hr>
     <h3>系統</h3>
     <button class="btn-outline full-width" id="logout-btn">登出系統</button>
 

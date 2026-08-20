@@ -56,6 +56,8 @@ let records = {};
 let computed = [];
 let noteEditing = {};
 let csvParsed = null;
+let absencePdfFile = null;
+let aiAttendanceAnalysis = null;
 let unsubStudents = null;      // Firestore 實時監聽取消函數
 let unsubToday = null;
 let legacyTodayRecords = {};   // 舊格式（單一大 doc）當日紀錄，升級當日兼容用
@@ -277,6 +279,42 @@ function bulkSetSkipped(studentsList) {
     }, { merge: true });
   });
   return batch.commit();
+}
+
+async function applyAiAttendance(recordsToApply) {
+  const td = todayStr();
+  ensureDateDoc(td);
+  const ops = [];
+
+  recordsToApply.forEach(result => {
+    const student = computed.find(s => s.id === result.studentId);
+    if (!student) return;
+    const oldNote = (student.dailyNote || "").trim();
+    const newNote = (result.note || "").trim();
+    const dailyNote = oldNote && newNote && !oldNote.includes(newNote)
+      ? `${oldNote}；${newNote}`
+      : (oldNote || newNote);
+
+    ops.push(batch => batch.set(entriesCol(td).doc(student.id), {
+      status: "skipped",
+      time: null,
+      dailyNote,
+      name: student.name,
+      class: student.class || "",
+      number: student.number || "",
+      aiAttendance: {
+        type: result.type,
+        sourceDate: td,
+        appliedAt: hkNow().getTime() / 1000,
+      },
+    }, { merge: true }));
+  });
+
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = db.batch();
+    ops.slice(i, i + 400).forEach(op => op(batch));
+    await batch.commit();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -789,11 +827,227 @@ function initSettingsEvents() {
   // Upload confirm
   document.getElementById("csv-upload-confirm-btn").addEventListener("click", confirmCsvUpload);
 
+  // AI attendance PDF
+  const absencePdfInput = document.getElementById("absence-pdf-upload");
+  document.getElementById("choose-absence-pdf-btn").addEventListener("click", () => absencePdfInput.click());
+  absencePdfInput.addEventListener("change", handleAbsencePdfSelection);
+  document.getElementById("analyze-absence-btn").addEventListener("click", analyzeAbsencePdf);
+
   // Logout
   document.getElementById("logout-btn").addEventListener("click", logout);
 
   // Fix timezone
   document.getElementById("fix-tz-btn").addEventListener("click", fixTimezone);
+}
+
+function resetAiAttendancePreview() {
+  aiAttendanceAnalysis = null;
+  const preview = document.getElementById("ai-attendance-preview");
+  preview.style.display = "none";
+  preview.innerHTML = "";
+}
+
+function handleAbsencePdfSelection(e) {
+  const file = e.target.files[0];
+  resetAiAttendancePreview();
+  absencePdfFile = null;
+
+  if (!file) return;
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    showToast("請選擇 PDF 檔案", "error");
+    e.target.value = "";
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showToast("PDF 不可超過 10 MB", "error");
+    e.target.value = "";
+    return;
+  }
+
+  absencePdfFile = file;
+  const info = document.getElementById("absence-pdf-info");
+  info.textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
+  info.style.display = "block";
+  document.getElementById("analyze-absence-btn").disabled = !students.length;
+}
+
+let pdfJsLoadPromise = null;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (pdfJsLoadPromise) return pdfJsLoadPromise;
+
+  pdfJsLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    script.integrity = "sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==";
+    script.crossOrigin = "anonymous";
+    script.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      resolve(window.pdfjsLib);
+    };
+    script.onerror = () => {
+      pdfJsLoadPromise = null;
+      reject(new Error("無法載入 PDF 讀取元件，請檢查網絡後重試。"));
+    };
+    document.head.appendChild(script);
+  });
+  return pdfJsLoadPromise;
+}
+
+function textItemsToLines(items) {
+  const lines = [];
+  items.forEach(item => {
+    const text = String(item.str || "").trim();
+    if (!text) return;
+    const x = Number(item.transform?.[4] || 0);
+    const y = Number(item.transform?.[5] || 0);
+    let line = lines.find(candidate => Math.abs(candidate.y - y) <= 2);
+    if (!line) {
+      line = { y, parts: [] };
+      lines.push(line);
+    }
+    line.parts.push({ x, text });
+  });
+  return lines
+    .sort((a, b) => b.y - a.y)
+    .map(line => line.parts.sort((a, b) => a.x - b.x).map(part => part.text).join(" "))
+    .join("\n");
+}
+
+async function extractPdfText(file) {
+  const pdfjs = await loadPdfJs();
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+  if (pdf.numPages > 20) throw new Error("PDF 不可超過 20 頁。請只上載當日名單。");
+
+  const pages = [];
+  for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
+    const page = await pdf.getPage(pageNo);
+    const content = await page.getTextContent();
+    pages.push(textItemsToLines(content.items));
+  }
+  const text = pages.join("\n\n--- 下一頁 ---\n\n").trim();
+  if (text.length < 20) {
+    throw new Error("這份 PDF 沒有足夠的可讀文字。請使用由 Excel 匯出的 PDF，而不是掃描圖片。");
+  }
+  return text.slice(0, 30000);
+}
+
+async function analyzeAbsencePdf() {
+  if (!absencePdfFile) return;
+  if (!students.length) {
+    showToast("本隊尚未有學生名單", "error");
+    return;
+  }
+
+  const button = document.getElementById("analyze-absence-btn");
+  button.disabled = true;
+  showLoading("讀取 PDF 及進行 AI 分析…");
+  resetAiAttendancePreview();
+
+  try {
+    const documentText = await extractPdfText(absencePdfFile);
+    const response = await fetch("/api/analyze-attendance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileName: absencePdfFile.name,
+        documentText,
+        targetDate: todayStr(),
+        team: currentTeam,
+        roster: computed.map(s => ({
+          id: s.id,
+          name: s.name,
+          class: s.class || "",
+          number: String(s.number || ""),
+        })),
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "AI 分析暫時失敗，請稍後重試。");
+
+    const knownIds = new Set(computed.map(s => s.id));
+    data.records = Array.isArray(data.records)
+      ? data.records.filter(r => knownIds.has(r.studentId))
+      : [];
+    aiAttendanceAnalysis = data;
+    renderAiAttendancePreview();
+  } catch (e) {
+    console.error(e);
+    showToast(e.message || "AI 分析失敗", "error");
+  } finally {
+    hideLoading();
+    button.disabled = !absencePdfFile || !students.length;
+  }
+}
+
+function renderAiAttendancePreview() {
+  const preview = document.getElementById("ai-attendance-preview");
+  const analysis = aiAttendanceAnalysis || {};
+  const results = Array.isArray(analysis.records) ? analysis.records : [];
+  const unmatched = Array.isArray(analysis.unmatched) ? analysis.unmatched : [];
+
+  const resultRows = results.map((result, index) => {
+    const student = computed.find(s => s.id === result.studentId);
+    if (!student) return "";
+    const typeLabel = result.type === "early_leave" ? "早退" : "缺席";
+    const confidenceLabel = result.confidence === "low" ? "需覆核" : (result.confidence === "medium" ? "中等信心" : "已配對");
+    const checked = result.confidence === "low" ? "" : "checked";
+    return `
+      <label class="ai-result-row">
+        <input type="checkbox" class="ai-result-check" data-index="${index}" ${checked}>
+        <span class="ai-result-main">
+          <span class="ai-result-heading">
+            <strong>${escHtml(student.name)}</strong>
+            <span>${escHtml(student.class || "")} ${escHtml(student.number || "")}號</span>
+            <span class="ai-type-badge">${typeLabel}</span>
+            <span class="ai-confidence">${confidenceLabel}</span>
+          </span>
+          <span class="ai-result-note">${escHtml(result.note || "")}</span>
+        </span>
+      </label>`;
+  }).join("");
+
+  preview.innerHTML = `
+    <div class="ai-preview-head">
+      <strong>分析結果：${results.length} 名本隊學生</strong>
+      <span>套用至今日 ${todayStr()}</span>
+    </div>
+    ${results.length ? `<div class="ai-result-list">${resultRows}</div>` : `<div class="info-box">未找到屬於本隊的學生，未有任何資料被更改。</div>`}
+    ${unmatched.length ? `<div class="ai-unmatched"><strong>未能配對（${unmatched.length}）</strong><div>${unmatched.map(item => escHtml(typeof item === "string" ? item : (item.text || item.name || "未知資料"))).join("、")}</div></div>` : ""}
+    ${results.length ? `<button class="btn-primary full-width" id="apply-ai-attendance-btn">套用已選學生至今日通報</button>` : ""}`;
+  preview.style.display = "block";
+
+  const applyButton = document.getElementById("apply-ai-attendance-btn");
+  if (applyButton) applyButton.addEventListener("click", confirmAiAttendanceApply);
+}
+
+async function confirmAiAttendanceApply() {
+  if (!aiAttendanceAnalysis) return;
+  const selected = [...document.querySelectorAll(".ai-result-check:checked")]
+    .map(input => aiAttendanceAnalysis.records[Number(input.dataset.index)])
+    .filter(Boolean);
+  if (!selected.length) {
+    showToast("請至少選擇一名學生", "error");
+    return;
+  }
+
+  showLoading("套用今日通報…");
+  try {
+    await applyAiAttendance(selected);
+    showToast(`已更新 ${selected.length} 名學生的今日通報`, "success");
+    resetAiAttendancePreview();
+    absencePdfFile = null;
+    document.getElementById("absence-pdf-upload").value = "";
+    document.getElementById("absence-pdf-info").style.display = "none";
+    document.getElementById("analyze-absence-btn").disabled = true;
+    document.querySelector('.tab[data-tab="list"]').click();
+  } catch (e) {
+    console.error(e);
+    showToast("套用失敗，請重試", "error");
+  } finally {
+    hideLoading();
+  }
 }
 
 async function handleCsvUpload(e) {

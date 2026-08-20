@@ -1,0 +1,8 @@
+{
+  "name": "walkteam-attendance-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
