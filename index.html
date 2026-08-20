@@ -26,18 +26,18 @@
       <div class="home-section-head">
         <div>
           <h3 id="home-ai-title">每日缺席及早退名單</h3>
-          <p>直接上載一次 PDF，系統會同時分析 A、B、C 三隊。</p>
+          <p>上載 Excel 匯出的 CSV，系統會同時配對 A、B、C 三隊。</p>
         </div>
-        <span class="home-team-pill">A · B · C</span>
+        <span class="home-team-pill">不用 AI</span>
       </div>
-      <div class="privacy-note">PDF 只會在這部裝置抽取文字；原 PDF 不會上傳。抽取的文字及三隊學生姓名會傳送至 Qwen 作分析。</div>
+      <div class="privacy-note">名單只會在這部裝置按姓名、班別及班號精確配對，不會傳送至 Qwen 或其他 AI 服務。</div>
       <div class="upload-area">
-        <input type="file" id="absence-pdf-upload" accept="application/pdf,.pdf" style="display:none">
-        <button class="btn-outline full-width" id="choose-absence-pdf-btn">選擇三隊共用的每日 PDF</button>
+        <input type="file" id="attendance-list-upload" accept=".csv,text/csv" style="display:none">
+        <button class="btn-outline full-width" id="choose-attendance-list-btn">選擇每日缺席名單 CSV</button>
       </div>
-      <div id="absence-pdf-info" class="file-info" style="display:none"></div>
-      <button class="btn-primary full-width ai-analyze-btn" id="analyze-absence-btn" disabled>開始分析三隊名單</button>
-      <div id="ai-attendance-preview" style="display:none"></div>
+      <div id="attendance-list-info" class="file-info" style="display:none"></div>
+      <button class="btn-primary full-width ai-analyze-btn" id="process-attendance-list-btn" disabled>開始配對三隊名單</button>
+      <div id="attendance-import-preview" style="display:none"></div>
     </section>
 
     <section class="home-team-card" aria-labelledby="home-team-title">
@@ -157,6 +157,6 @@
 
 </div>
 
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
