@@ -193,7 +193,7 @@ export async function onRequestPost(context) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: env.QWEN_MODEL || "qwen-flash",
+          model: env.QWEN_MODEL || "qwen-plus",
           messages: [
             { role: "system", content: makeSystemPrompt() },
             { role: "user", content: makePrompt(input) },

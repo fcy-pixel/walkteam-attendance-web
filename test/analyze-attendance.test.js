@@ -58,7 +58,7 @@ test("normalizes and validates Qwen structured output", async () => {
     const response = await onRequestPost(context(sampleBody, { QWEN_API_KEY: "test-key" }));
     assert.equal(response.status, 200);
     const result = await response.json();
-    assert.equal(qwenRequestBody.model, "qwen-flash");
+    assert.equal(qwenRequestBody.model, "qwen-plus");
     assert.equal(result.records.length, 2);
     assert.equal(result.records[0].team, "A");
     assert.equal(result.records[0].studentId, "A_一信_8_林浩鋒");
