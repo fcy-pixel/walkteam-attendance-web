@@ -395,6 +395,7 @@ function initLogin() {
   // 每次進入都預設A隊，使用者需要手動選隊
   teamSel.value = "A";
   currentTeam = "A";
+  initAiAttendanceEvents();
 
   // 已取消密碼：選隊後按「進入」即可
   btn.addEventListener("click", () => {
@@ -845,17 +846,18 @@ function initSettingsEvents() {
   // Upload confirm
   document.getElementById("csv-upload-confirm-btn").addEventListener("click", confirmCsvUpload);
 
-  // AI attendance PDF
-  const absencePdfInput = document.getElementById("absence-pdf-upload");
-  document.getElementById("choose-absence-pdf-btn").addEventListener("click", () => absencePdfInput.click());
-  absencePdfInput.addEventListener("change", handleAbsencePdfSelection);
-  document.getElementById("analyze-absence-btn").addEventListener("click", analyzeAbsencePdf);
-
   // Logout
   document.getElementById("logout-btn").addEventListener("click", logout);
 
   // Fix timezone
   document.getElementById("fix-tz-btn").addEventListener("click", fixTimezone);
+}
+
+function initAiAttendanceEvents() {
+  const absencePdfInput = document.getElementById("absence-pdf-upload");
+  document.getElementById("choose-absence-pdf-btn").addEventListener("click", () => absencePdfInput.click());
+  absencePdfInput.addEventListener("change", handleAbsencePdfSelection);
+  document.getElementById("analyze-absence-btn").addEventListener("click", analyzeAbsencePdf);
 }
 
 function resetAiAttendancePreview() {
@@ -1071,13 +1073,21 @@ async function confirmAiAttendanceApply() {
     const teamText = ["A", "B", "C"]
       .map(team => `${team}隊 ${selected.filter(result => result.team === team).length} 人`)
       .join("、");
-    showToast(`已更新 ${selected.length} 人（${teamText}）`, "success");
+    const successMessage = `已更新 ${selected.length} 人（${teamText}）`;
+    showToast(successMessage, "success");
     resetAiAttendancePreview();
     absencePdfFile = null;
     document.getElementById("absence-pdf-upload").value = "";
     document.getElementById("absence-pdf-info").style.display = "none";
     document.getElementById("analyze-absence-btn").disabled = true;
-    document.querySelector('.tab[data-tab="list"]').click();
+    const loginScreen = document.getElementById("login-screen");
+    if (getComputedStyle(loginScreen).display !== "none") {
+      const preview = document.getElementById("ai-attendance-preview");
+      preview.innerHTML = `<div class="ai-apply-success"><strong>三隊通報已完成</strong><span>${escHtml(successMessage)}</span></div>`;
+      preview.style.display = "block";
+    } else {
+      document.querySelector('.tab[data-tab="list"]').click();
+    }
   } catch (e) {
     console.error(e);
     showToast("套用失敗，請重試", "error");
