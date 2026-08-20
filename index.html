@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>歸程隊 點名</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231e3a5f'/><text x='50' y='64' text-anchor='middle' font-family='Arial' font-size='40' font-weight='700' fill='white'>WT</text></svg>">
   <link rel="stylesheet" href="style.css">
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -14,9 +14,9 @@
 <!-- ═══ Login Screen ═══ -->
 <div id="login-screen">
   <div class="login-box">
-    <div class="login-icon">✅</div>
+    <div class="login-icon">WT</div>
     <h2>歸程隊</h2>
-    <p class="login-sub">點名系統</p>
+    <p class="login-sub">學生點名系統</p>
     <select id="login-team">
       <option value="A" selected>歸程隊A隊</option>
       <option value="B">歸程隊B隊</option>
@@ -33,7 +33,8 @@
   <div class="header-row">
     <div id="header-card" class="header-card">
       <div class="header-left">
-        <div class="header-title">🏃 <span id="header-team-label">歸程隊C隊</span>　點名系統</div>
+        <div class="header-kicker">學生歸程管理</div>
+        <div class="header-title"><span id="header-team-label">歸程隊C隊</span> 點名系統</div>
         <div class="header-date" id="header-date"></div>
         <div class="progress-bar-wrap">
           <div class="progress-bar" id="header-progress" style="width:0%"></div>
@@ -46,7 +47,7 @@
         <div id="header-skipped-badge" style="display:none"></div>
       </div>
     </div>
-    <button class="refresh-btn" id="refresh-btn" title="重新整理">🔄</button>
+    <button class="refresh-btn" id="refresh-btn" title="重新整理" aria-label="重新整理">更新</button>
   </div>
 
   <!-- Clock -->
@@ -57,22 +58,22 @@
 
   <!-- Tab Bar -->
   <div class="tab-bar" id="tab-bar">
-    <button class="tab active" data-tab="list">📋 今日名單</button>
-    <button class="tab" data-tab="history">📅 歷史紀錄</button>
-    <button class="tab" data-tab="settings">⚙️ 設定</button>
+    <button class="tab active" data-tab="list">今日名單</button>
+    <button class="tab" data-tab="history">歷史紀錄</button>
+    <button class="tab" data-tab="settings">設定</button>
   </div>
 
   <!-- ═══ Tab: 今日名單 ═══ -->
   <div id="tab-list" class="tab-content">
-    <div id="list-empty" style="display:none" class="info-box">🗂️ 雲端尚無學生資料，請前往「設定」上傳 CSV 名單。</div>
+    <div id="list-empty" style="display:none" class="info-box">雲端尚無學生資料，請前往「設定」上傳 CSV 名單。</div>
     <div id="list-content">
       <div class="filter-row">
         <input type="text" id="list-search" placeholder="搜尋班級或姓名…" class="input-field" style="flex:3">
         <select id="list-filter" class="select-field" style="flex:1">
           <option value="all">全部</option>
-          <option value="absent">未到 ⬜</option>
-          <option value="present">已到 ✅</option>
-          <option value="skipped">不跟歸程隊 🚫</option>
+          <option value="absent">未到</option>
+          <option value="present">已到</option>
+          <option value="skipped">不跟歸程隊</option>
         </select>
       </div>
       <div id="activity-alert" style="display:none"></div>
@@ -87,7 +88,7 @@
     <div id="history-content">
       <div class="filter-row">
         <select id="history-date" class="select-field" style="flex:3"></select>
-        <button class="btn-outline" id="history-export-btn" style="flex:1">⬇️ 匯出</button>
+        <button class="btn-outline" id="history-export-btn" style="flex:1">匯出紀錄</button>
       </div>
       <div id="history-summary"></div>
       <div id="history-cards"></div>
@@ -96,17 +97,17 @@
 
   <!-- ═══ Tab: 設定 ═══ -->
   <div id="tab-settings" class="tab-content" style="display:none">
-    <h3>⬇️ 匯出今日紀錄</h3>
-    <button class="btn-primary full-width" id="export-today-btn">📥 下載今日出席名單 (CSV)</button>
+    <h3>匯出今日紀錄</h3>
+    <button class="btn-primary full-width" id="export-today-btn">下載今日出席名單 (CSV)</button>
 
     <hr>
-    <h3>📋 下載現有名單</h3>
-    <button class="btn-primary full-width" id="export-students-btn">📥 下載現有雲端名單 (CSV)</button>
+    <h3>下載現有名單</h3>
+    <button class="btn-primary full-width" id="export-students-btn">下載現有雲端名單 (CSV)</button>
 
     <hr>
-    <h3>☁️ 上傳 / 更新雲端名單</h3>
+    <h3>上傳或更新雲端名單</h3>
     <p class="caption">欄位：班級、學號、姓名、跟隨兄/姊回家、星期一～五。</p>
-    <button class="btn-outline full-width" id="download-template-btn">📄 下載名單範本 (CSV)</button>
+    <button class="btn-outline full-width" id="download-template-btn">下載名單範本 (CSV)</button>
     <div class="upload-area" id="upload-area">
       <input type="file" id="csv-upload" accept=".csv" style="display:none">
       <button class="btn-outline full-width" id="choose-csv-btn">選擇 CSV 檔案</button>
@@ -114,17 +115,17 @@
     <div id="csv-preview" style="display:none">
       <div id="csv-preview-info" class="info-box"></div>
       <div id="csv-preview-table-wrap"></div>
-      <button class="btn-primary full-width" id="csv-upload-confirm-btn">☁️ 確認上傳至雲端</button>
+      <button class="btn-primary full-width" id="csv-upload-confirm-btn">確認上傳至雲端</button>
     </div>
 
     <hr>
-    <h3>🔓 登出</h3>
+    <h3>系統</h3>
     <button class="btn-outline full-width" id="logout-btn">登出系統</button>
 
     <hr>
-    <h3>🕐 修正歷史時區</h3>
+    <h3>修正歷史時區</h3>
     <p class="caption">如過往紀錄時間顯示為 UTC（比香港慢 8 小時），按此一次性修正。每筆時間均 +8 小時。請勿重複執行。</p>
-    <button class="btn-outline full-width" id="fix-tz-btn">🔧 將所有歷史紀錄時間 +8 小時（UTC→HKT）</button>
+    <button class="btn-outline full-width" id="fix-tz-btn">將所有歷史紀錄時間 +8 小時（UTC→HKT）</button>
   </div>
 
 </div>

@@ -27,7 +27,7 @@ if (CONFIG_READY) {
 function showConfigError() {
   document.getElementById("login-screen").innerHTML = `
     <div class="login-box" style="max-width:500px;">
-      <div class="login-icon">⚙️</div>
+      <div class="login-icon">WT</div>
       <h2>需要設定 Firebase</h2>
       <p style="color:#64748b;font-size:.85rem;margin:8px 0 16px;line-height:1.6;text-align:left;">
         請到 <a href="https://console.firebase.google.com/project/walkteam-6ffb5/settings/general" target="_blank">Firebase Console</a> 完成以下步驟：<br><br>
@@ -169,7 +169,7 @@ function startListeners() {
   }, err => {
     console.error(err);
     hideLoading();
-    showToast("❌ 學生名單同步失敗", "error");
+    showToast("學生名單同步失敗", "error");
   });
 
   // 舊格式當日紀錄只需讀一次（升級當日早段已點嘅名）
@@ -185,7 +185,7 @@ function startListeners() {
   }, err => {
     console.error(err);
     hideLoading();
-    showToast("❌ 點名紀錄同步失敗", "error");
+    showToast("點名紀錄同步失敗", "error");
   });
 }
 
@@ -412,7 +412,7 @@ function updateHeader() {
   const badge = document.getElementById("header-skipped-badge");
   if (skippedN > 0) {
     badge.style.display = "inline-block";
-    badge.textContent = `🚫 ${skippedN}  不跟歸程隊`;
+    badge.textContent = `${skippedN} 人不跟歸程隊`;
   } else {
     badge.style.display = "none";
   }
@@ -487,11 +487,11 @@ function renderActivityAlert() {
   div.style.display = "block";
   div.innerHTML = `
     <div class="activity-alert">
-      <div class="activity-alert-title">📋 今日有活動、尚未標記的學生（${actAbsent.length} 人）</div>
+      <div class="activity-alert-title">今日有活動、尚未標記的學生（${actAbsent.length} 人）</div>
       <div class="activity-alert-names">${actAbsent.map(s => escHtml(s.name)).join("、")}</div>
       <div class="activity-alert-hint">可一鍵預先標記為不跟歸程隊，方便老師點名。</div>
     </div>
-    <button class="btn-primary full-width" onclick="bulkSkipActivity()">🚫 一鍵標記為不跟歸程隊（${actAbsent.length} 人）</button>`;
+    <button class="btn-secondary bulk-action full-width" onclick="bulkSkipActivity()">標記為不跟歸程隊（${actAbsent.length} 人）</button>`;
 }
 
 window.bulkSkipActivity = function() {
@@ -499,9 +499,9 @@ window.bulkSkipActivity = function() {
   if (!actAbsent.length) return;
   bulkSetSkipped(actAbsent).catch(e => {
     console.error(e);
-    showToast("❌ 標記失敗，請重試", "error");
+    showToast("標記失敗，請重試", "error");
   });
-  showToast(`✅ 已標記 ${actAbsent.length} 人不跟歸程隊`, "success");
+  showToast(`已標記 ${actAbsent.length} 人不跟歸程隊`, "success");
 };
 
 function renderListCards() {
@@ -523,9 +523,9 @@ function renderListCards() {
   document.getElementById("list-stats").innerHTML = `
     <div class="stats-row">
       <span class="stat-badge total">共 ${view.length} 人</span>
-      <span class="stat-badge present">✅ 已到 ${presV}</span>
-      <span class="stat-badge absent">⬜ 未到 ${absN}</span>
-      ${skipV ? `<span class="stat-badge skipped">🚫 不跟 ${skipV}</span>` : ""}
+      <span class="stat-badge present">已到 ${presV}</span>
+      <span class="stat-badge absent">未到 ${absN}</span>
+      ${skipV ? `<span class="stat-badge skipped">不跟 ${skipV}</span>` : ""}
     </div>`;
 
   document.getElementById("list-cards").innerHTML = view.map(s => renderStudentCard(s, "L_")).join("");
@@ -534,36 +534,41 @@ function renderListCards() {
 function renderStudentCard(s, prefix) {
   const isP = s.status === "present";
   const isSk = s.status === "skipped";
-  const icon = isP ? "✅" : (isSk ? "🚫" : "⬜");
   const statusClass = isP ? "present" : (isSk ? "skipped" : "absent");
-  const timeHtml = s.time ? `<span class="student-time">🕐 ${escHtml(s.time)}</span>` : "";
-  const notesHtml = s.notes ? `<div class="student-notes">👨‍👧 ${escHtml(s.notes)}</div>` : "";
+  const statusLabel = isP ? "已到" : (isSk ? "不跟" : "未到");
+  const timeHtml = s.time ? `<span class="student-time">${escHtml(s.time)}</span>` : "";
+  const notesHtml = s.notes ? `<div class="student-notes"><span class="meta-label">跟隨</span>${escHtml(s.notes)}</div>` : "";
   const acts = todayActs(s);
   const actsHtml = acts.length ? `<div style="margin-top:5px;">${acts.map(a => `<span class="student-activity">${escHtml(a)}</span>`).join("")}</div>` : "";
-  const noteBadge = s.dailyNote ? `<div class="student-daily-note"><span>📢</span><span>${escHtml(s.dailyNote)}</span></div>` : "";
-  const skipBadge = isSk ? `<div class="student-skip-badge"><span>🚫</span><span>不跟歸程隊放學</span></div>` : "";
+  const noteBadge = s.dailyNote ? `<div class="student-daily-note"><span class="meta-label">通報</span><span>${escHtml(s.dailyNote)}</span></div>` : "";
+  const skipBadge = isSk ? `<div class="student-skip-badge">不跟歸程隊放學</div>` : "";
 
-  const btnLabel = isP ? "↩️ 取消報到" : "✅ 報到";
+  const btnLabel = isP ? "取消報到" : "報到";
   const btnClass = isP ? "btn-secondary" : "btn-primary";
   const skipBtnHtml = isSk
-    ? `<button class="btn-secondary" onclick="cardAction('${esc(s.id)}','absent')">↩️ 取消不跟</button>`
-    : `<button class="btn-secondary" onclick="cardAction('${esc(s.id)}','skipped')">🚫 不跟歸程隊</button>`;
-  const noteBtnLabel = s.dailyNote ? "✏️ 編輯通報" : "📝 通報";
+    ? `<button class="btn-secondary" onclick="cardAction('${esc(s.id)}','absent')">取消不跟</button>`
+    : `<button class="btn-secondary" onclick="cardAction('${esc(s.id)}','skipped')">不跟歸程隊</button>`;
+  const noteBtnLabel = s.dailyNote ? "編輯通報" : "通報";
   const noteFormId = `note_${prefix}${s.id}`;
   const noteFormHtml = noteEditing[s.id] ? `
     <div class="note-form" id="nf_${esc(s.id)}">
-      <div style="font-size:.82rem;color:#64748b;margin-bottom:4px;">📢 今日通報 — ${escHtml(s.class||"")} ${escHtml(s.name)}</div>
+      <div class="note-form-title">今日通報 · ${escHtml(s.class||"")} ${escHtml(s.name)}</div>
       <textarea id="nt_${esc(s.id)}">${escHtml(s.dailyNote || "")}</textarea>
       <div class="quick-notes">快速：家長接回　早退　病假/事假　自行放學</div>
       <div class="note-form-buttons">
-        <button class="btn-primary" onclick="saveNote('${esc(s.id)}')">💾 儲存</button>
+        <button class="btn-primary" onclick="saveNote('${esc(s.id)}')">儲存</button>
         <button class="btn-secondary" onclick="cancelNote('${esc(s.id)}')">取消</button>
       </div>
     </div>` : "";
 
   return `
     <div class="student-card ${statusClass}">
-      <span class="student-name">${icon} ${escHtml(s.name)}</span>${timeHtml}
+      <div class="student-heading">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="student-name">${escHtml(s.name)}</span>
+        <span class="student-status">${statusLabel}</span>
+        ${timeHtml}
+      </div>
       <div class="student-meta">
         <span class="student-class">${escHtml(s.class||"")}</span>
         <span class="student-number">${escHtml(s.number||"")}號</span>
@@ -585,7 +590,7 @@ window.cardAction = function(id, newStatus) {
   if (!s) return;
   setStatus(s, newStatus).catch(e => {
     console.error(e);
-    showToast(`❌ ${s.name} 儲存失敗，請重試`, "error");
+    showToast(`${s.name} 儲存失敗，請重試`, "error");
   });
 };
 
@@ -602,10 +607,10 @@ window.saveNote = function(id) {
   noteEditing[id] = false;
   setNote(s, val).catch(e => {
     console.error(e);
-    showToast("❌ 通報儲存失敗，請重試", "error");
+    showToast("通報儲存失敗，請重試", "error");
   });
   renderCurrentTab();
-  showToast("✅ 已儲存通報", "success");
+  showToast("已儲存通報", "success");
 };
 
 window.cancelNote = function(id) {
@@ -626,7 +631,7 @@ async function renderHistoryTab() {
       historyDates = await loadDates();
     } catch(e) {
       console.error(e);
-      showToast("❌ 讀取歷史紀錄失敗", "error");
+      showToast("讀取歷史紀錄失敗", "error");
     } finally {
       hideLoading();
     }
@@ -666,7 +671,7 @@ async function renderHistoryTab() {
       downloadCsv(makeCsv(hData, date), `歸程隊${currentTeam}隊歷史_${date}.csv`);
     } catch(e) {
       console.error(e);
-      showToast("❌ 匯出失敗", "error");
+      showToast("匯出失敗", "error");
     } finally {
       hideLoading();
     }
@@ -706,7 +711,7 @@ async function renderHistoryCards() {
     hRec = await loadRecords(date);
   } catch(e) {
     console.error(e);
-    showToast("❌ 讀取失敗", "error");
+    showToast("讀取失敗", "error");
     return;
   } finally {
     hideLoading();
@@ -727,15 +732,19 @@ async function renderHistoryCards() {
     const isP = s.status === "present";
     const isSk = s.status === "skipped";
     const dim = (!isP && !isSk) ? "dim" : "";
-    const icon = isP ? "✅" : (isSk ? "🚫" : "❌");
-    const tt = s.time ? `<span style="font-size:.75rem;color:#16a34a;margin-left:8px;">🕐 ${escHtml(s.time)}</span>` : "";
-    const skipT = isSk ? '<span style="font-size:.75rem;color:#92400e;margin-left:8px;background:#fef9c3;border-radius:4px;padding:1px 6px;">不跟歸程隊</span>' : "";
-    const nt = s.dailyNote ? `<div style="font-size:.78rem;color:#b91c1c;margin-top:3px;">📢 ${escHtml(s.dailyNote)}</div>` : "";
+    const statusClass = isP ? "present" : (isSk ? "skipped" : "absent");
+    const statusLabel = isP ? "已到" : (isSk ? "不跟" : "未到");
+    const tt = s.time ? `<span class="history-time">${escHtml(s.time)}</span>` : "";
+    const nt = s.dailyNote ? `<div class="history-note"><span class="meta-label">通報</span>${escHtml(s.dailyNote)}</div>` : "";
     return `
-      <div class="history-card ${dim}">
-        <span style="font-weight:700;">${icon} ${escHtml(s.name)}</span>${tt}${skipT}
-        <div style="font-size:.78rem;color:#64748b;margin-top:2px;">
-          <span style="background:#e2e8f0;border-radius:4px;padding:1px 6px;margin-right:4px;">${escHtml(s.class||"")}</span>${escHtml(s.number||"")}號
+      <div class="history-card ${dim} ${statusClass}">
+        <div class="history-card-heading">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span class="history-name">${escHtml(s.name)}</span>
+          <span class="history-status">${statusLabel}</span>${tt}
+        </div>
+        <div class="history-meta">
+          <span class="student-class">${escHtml(s.class||"")}</span>${escHtml(s.number||"")}號
         </div>
         ${nt}
       </div>`;
@@ -824,7 +833,7 @@ async function handleCsvUpload(e) {
   }
 
   if (hrow === -1) {
-    showToast("❌ 找不到標題列，請確認 CSV 包含「班級」和「姓名」欄位。", "error");
+    showToast("找不到標題列，請確認 CSV 包含「班級」和「姓名」欄位。", "error");
     return;
   }
 
@@ -895,12 +904,12 @@ async function confirmCsvUpload() {
       await batch.commit();
     }
     // 學生名單由實時監聽自動更新，毋須手動重讀
-    showToast(`✅ 已上傳 ${csvParsed.length} 筆學生資料！`, "success");
+    showToast(`已上傳 ${csvParsed.length} 筆學生資料`, "success");
     csvParsed = null;
     document.getElementById("csv-preview").style.display = "none";
     document.getElementById("csv-upload").value = "";
   } catch(e) {
-    showToast("❌ 上傳失敗：" + e.message, "error");
+    showToast("上傳失敗：" + e.message, "error");
   } finally {
     hideLoading();
   }
@@ -936,9 +945,9 @@ async function fixTimezone() {
         await doc.ref.update({ records: updated });
       }
     }
-    showToast(`✅ 已修正 ${fixed} 筆時間紀錄！`, "success");
+    showToast(`已修正 ${fixed} 筆時間紀錄`, "success");
   } catch(e) {
-    showToast("❌ 修正失敗：" + e.message, "error");
+    showToast("修正失敗：" + e.message, "error");
   }
   hideLoading();
 }
