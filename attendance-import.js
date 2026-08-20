@@ -64,6 +64,13 @@ function uniqueDetails(values) {
   });
 }
 
+export function combineAttendanceNotes(manualNote, importedNote) {
+  const manual = clean(manualNote);
+  const imported = clean(importedNote);
+  if (!imported || manual.includes(imported)) return manual;
+  return manual ? `${manual}；${imported}` : imported;
+}
+
 function attendanceType(title, status, reason, teacherRemark, officeRemark) {
   const signal = [title, status, reason, teacherRemark, officeRemark].join(" ");
   return /早退|提早離校|早離|家長接走/.test(signal) ? "early_leave" : "absent";

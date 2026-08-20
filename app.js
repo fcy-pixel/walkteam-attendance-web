@@ -1,4 +1,4 @@
-import { parseCsv, parseAttendanceCsv, matchAttendanceRecords } from "./attendance-import.js";
+import { combineAttendanceNotes, parseCsv, parseAttendanceCsv, matchAttendanceRecords } from "./attendance-import.js";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    歸程隊點名系統 — Pure Frontend (Firebase Client SDK)
@@ -61,6 +61,9 @@ let csvParsed = null;
 let attendanceListFile = null;
 let attendanceImportAnalysis = null;
 let attendanceImportRoster = [];
+let attendanceRosterCache = null;
+let attendanceRosterPromise = null;
+let attendanceRosterCachedAt = 0;
 let unsubStudents = null;      // Firestore 實時監聽取消函數
 let unsubToday = null;
 let legacyTodayRecords = {};   // 舊格式（單一大 doc）當日紀錄，升級當日兼容用
@@ -249,12 +252,15 @@ function rerenderPreservingInput() {
 }
 
 function mergeData(studs, recs) {
-  return studs.map(s => ({
-    ...s,
-    status: (recs[s.id] && recs[s.id].status) || "absent",
-    time: (recs[s.id] && recs[s.id].time) || "",
-    dailyNote: (recs[s.id] && recs[s.id].dailyNote) || "",
-  }));
+  return studs.map(s => {
+    const rec = recs[s.id] || {};
+    return {
+      ...s,
+      status: rec.status || "absent",
+      time: rec.time || "",
+      dailyNote: combineAttendanceNotes(rec.dailyNote, rec.attendanceImportNote),
+    };
+  });
 }
 
 function setStatus(student, newStatus) {
@@ -275,6 +281,7 @@ function setNote(student, note) {
   ensureDateDoc(td);
   return entriesCol(td).doc(student.id).set({
     dailyNote: note,
+    attendanceImportNote: firebase.firestore.FieldValue.delete(),
     name: student.name,
     class: student.class || "",
     number: student.number || "",
@@ -299,26 +306,21 @@ async function applyAttendanceImport(recordsToApply) {
   const teams = new Set(recordsToApply.map(result => result.team).filter(team => TEAMS[team]));
   teams.forEach(team => ensureDateDocFor(team, td));
 
-  const prepared = await Promise.all(recordsToApply.map(async result => {
-    const student = attendanceImportRoster.find(s => s.team === result.team && s.id === result.studentId);
+  const rosterById = new Map(attendanceImportRoster.map(student => [`${student.team}\u0000${student.id}`, student]));
+  const prepared = recordsToApply.map(result => {
+    const student = rosterById.get(`${result.team}\u0000${result.studentId}`);
     if (!student || !TEAMS[result.team]) return null;
     const ref = entriesColFor(result.team, td).doc(student.id);
-    const snap = await ref.get();
-    const oldNote = snap.exists ? String(snap.data().dailyNote || "").trim() : "";
-    const newNote = (result.note || "").trim();
-    const dailyNote = oldNote && newNote && !oldNote.includes(newNote)
-      ? `${oldNote}；${newNote}`
-      : (oldNote || newNote);
-    return { result, student, ref, dailyNote };
-  }));
+    return { result, student, ref };
+  });
 
   const ops = [];
 
-  prepared.filter(Boolean).forEach(({ result, student, ref, dailyNote }) => {
+  prepared.filter(Boolean).forEach(({ result, student, ref }) => {
     ops.push(batch => batch.set(ref, {
       status: "skipped",
       time: null,
-      dailyNote,
+      attendanceImportNote: (result.note || "").trim(),
       name: student.name,
       class: student.class || "",
       number: student.number || "",
@@ -726,7 +728,7 @@ function buildHistoryData(hRec) {
         class: rec.class || "", number: rec.number || "",
         notes: "", activities: [],
         status: rec.status === "present" ? "present" : "absent",
-        time: rec.time || "", dailyNote: rec.dailyNote || "",
+        time: rec.time || "", dailyNote: combineAttendanceNotes(rec.dailyNote, rec.attendanceImportNote),
       });
     }
   }
@@ -834,7 +836,11 @@ function initSettingsEvents() {
 
 function initAttendanceImportEvents() {
   const attendanceInput = document.getElementById("attendance-list-upload");
-  document.getElementById("choose-attendance-list-btn").addEventListener("click", () => attendanceInput.click());
+  document.getElementById("choose-attendance-list-btn").addEventListener("click", () => {
+    // 開啟選檔視窗時才背景載入三隊名單；不使用匯入功能的老師不會產生額外讀取。
+    loadAllTeamStudents().catch(error => console.warn("三隊名單預載失敗，將於配對時重試", error));
+    attendanceInput.click();
+  });
   attendanceInput.addEventListener("change", handleAttendanceListSelection);
   document.getElementById("process-attendance-list-btn").addEventListener("click", processAttendanceList);
 }
@@ -872,12 +878,22 @@ function handleAttendanceListSelection(e) {
 }
 
 async function loadAllTeamStudents() {
+  if (attendanceRosterCache && Date.now() - attendanceRosterCachedAt < 60_000) return attendanceRosterCache;
+  attendanceRosterCache = null;
+  if (attendanceRosterPromise) return attendanceRosterPromise;
+
   const teams = ["A", "B", "C"];
-  const snapshots = await Promise.all(teams.map(team => db.collection(colStudentsFor(team)).get()));
-  return snapshots.flatMap((snapshot, index) => {
-    const team = teams[index];
-    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, team }));
-  });
+  attendanceRosterPromise = Promise.all(teams.map(team => db.collection(colStudentsFor(team)).get()))
+    .then(snapshots => {
+      attendanceRosterCache = snapshots.flatMap((snapshot, index) => {
+        const team = teams[index];
+        return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, team }));
+      });
+      attendanceRosterCachedAt = Date.now();
+      return attendanceRosterCache;
+    })
+    .finally(() => { attendanceRosterPromise = null; });
+  return attendanceRosterPromise;
 }
 
 async function processAttendanceList() {
@@ -1092,6 +1108,9 @@ async function confirmCsvUpload() {
       ops.slice(i, i + 400).forEach(op => op(batch));
       await batch.commit();
     }
+    // 本頁可能剛更新其中一隊名單，下次首頁配對時重新取得三隊最新資料。
+    attendanceRosterCache = null;
+    attendanceRosterCachedAt = 0;
     // 學生名單由實時監聽自動更新，毋須手動重讀
     showToast(`已上傳 ${csvParsed.length} 筆學生資料`, "success");
     csvParsed = null;

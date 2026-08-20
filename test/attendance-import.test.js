@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { matchAttendanceRecords, parseAttendanceCsv, parseCsv } from "../attendance-import.js";
+import { combineAttendanceNotes, matchAttendanceRecords, parseAttendanceCsv, parseCsv } from "../attendance-import.js";
 
 const templateCsv = `檢視缺席名單 2026-05-06 (上午)
 姓名,班別,班號,性別,拍咭時間,出席?,豁免,已呈交證明文件,原因,老師備註,校務處備註,監護人資料
@@ -52,4 +52,10 @@ test("does not auto-apply missing or cross-team duplicate students", () => {
 test("keeps quoted commas in CSV fields", () => {
   const rows = parseCsv('姓名,備註\n測試甲,"發燒,咳嗽"');
   assert.equal(rows[1][1], "發燒,咳嗽");
+});
+
+test("combines imported notices without duplicating an existing teacher note", () => {
+  assert.equal(combineAttendanceNotes("家長已通知", "缺席，不跟歸程隊放學"), "家長已通知；缺席，不跟歸程隊放學");
+  assert.equal(combineAttendanceNotes("缺席，不跟歸程隊放學", "缺席，不跟歸程隊放學"), "缺席，不跟歸程隊放學");
+  assert.equal(combineAttendanceNotes("", "缺席，不跟歸程隊放學"), "缺席，不跟歸程隊放學");
 });
