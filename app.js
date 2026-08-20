@@ -755,12 +755,6 @@ async function renderHistoryCards() {
 // SETTINGS
 // ═══════════════════════════════════════════════════════════════════════════
 function initSettingsEvents() {
-  // Export today
-  document.getElementById("export-today-btn").addEventListener("click", () => {
-    if (!computed.length) { showToast("沒有資料可匯出", "error"); return; }
-    downloadCsv(makeCsv(computed, todayStr()), `歸程隊${currentTeam}隊點名_${todayStr()}.csv`);
-  });
-
   // Export students
   document.getElementById("export-students-btn").addEventListener("click", () => {
     if (!students.length) { showToast("沒有學生資料", "error"); return; }
