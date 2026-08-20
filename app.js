@@ -972,8 +972,11 @@ async function analyzeAbsencePdf() {
   resetAiAttendancePreview();
 
   try {
-    const documentText = await extractPdfText(absencePdfFile);
-    aiAttendanceRoster = await loadAllTeamStudents();
+    const [documentText, roster] = await Promise.all([
+      extractPdfText(absencePdfFile),
+      loadAllTeamStudents(),
+    ]);
+    aiAttendanceRoster = roster;
     if (!aiAttendanceRoster.length) throw new Error("A、B、C 三隊尚未有學生名單。");
     const response = await fetch("/api/analyze-attendance", {
       method: "POST",

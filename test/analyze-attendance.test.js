@@ -40,20 +40,25 @@ test("rejects a cross-origin request", async () => {
 
 test("normalizes and validates Qwen structured output", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => Response.json({
-    choices: [{ message: { content: JSON.stringify({
-      records: [
-        { team: "A", studentId: "A_一信_8_林浩鋒", type: "absent", reason: "病假", remark: "感冒", confidence: "high" },
-        { team: "B", studentId: "B_二望_3_測試同學", type: "early_leave", time: "13:30", confidence: "high" },
-        { team: "C", studentId: "invented", type: "absent", confidence: "high" },
-      ],
-      unmatched: [],
-    }) } }],
-  });
+  let qwenRequestBody;
+  globalThis.fetch = async (_url, options) => {
+    qwenRequestBody = JSON.parse(options.body);
+    return Response.json({
+      choices: [{ message: { content: JSON.stringify({
+        records: [
+          { team: "A", studentId: "A_一信_8_林浩鋒", type: "absent", reason: "病假", remark: "感冒", confidence: "high" },
+          { team: "B", studentId: "B_二望_3_測試同學", type: "early_leave", time: "13:30", confidence: "high" },
+          { team: "C", studentId: "invented", type: "absent", confidence: "high" },
+        ],
+        unmatched: [],
+      }) } }],
+    });
+  };
   try {
     const response = await onRequestPost(context(sampleBody, { QWEN_API_KEY: "test-key" }));
     assert.equal(response.status, 200);
     const result = await response.json();
+    assert.equal(qwenRequestBody.model, "qwen-flash");
     assert.equal(result.records.length, 2);
     assert.equal(result.records[0].team, "A");
     assert.equal(result.records[0].studentId, "A_一信_8_林浩鋒");
