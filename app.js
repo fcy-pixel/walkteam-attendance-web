@@ -85,6 +85,7 @@ function todayLabel() {
   return `${n.getFullYear()}年${n.getMonth()+1}月${n.getDate()}日　${WEEKDAYS[n.getDay() === 0 ? 6 : n.getDay()-1]}`;
 }
 function todayActs(student) {
+  if (student.activityException) return [];
   const wd = WEEKDAYS[hkNow().getDay() === 0 ? 6 : hkNow().getDay()-1];
   return (student.activities || []).filter(a => a.startsWith(wd));
 }
@@ -258,6 +259,7 @@ function mergeData(studs, recs) {
       ...s,
       status: rec.status || "absent",
       time: rec.time || "",
+      activityException: rec.activityException === true,
       dailyNote: combineAttendanceNotes(rec.dailyNote, rec.attendanceImportNote),
     };
   });
