@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>歸程隊 點名</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231e3a5f'/><text x='50' y='64' text-anchor='middle' font-family='Arial' font-size='40' font-weight='700' fill='white'>WT</text></svg>">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260909-activity-filter">
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
@@ -18,7 +18,7 @@
       <div class="login-icon"><img src="school-logo.png" alt="基慈學校校章"></div>
       <div>
         <h2>歸程隊</h2>
-        <p class="login-sub">學生點名及通報系統</p>
+        <p class="login-sub">學生點名及通報</p>
       </div>
     </div>
 
@@ -26,16 +26,21 @@
       <div class="home-section-head">
         <div>
           <h3 id="home-ai-title">每日缺席及早退名單</h3>
-          <p>上載 Excel 匯出的 CSV，系統會同時配對 A、B、C 三隊。</p>
+          <p>輸入姓名清單，同時配對 A、B、C 三隊。核對後可標記為不跟歸程隊。</p>
         </div>
       </div>
-      <div class="upload-area">
-        <input type="file" id="attendance-list-upload" accept=".csv,text/csv" style="display:none">
-        <button class="btn-outline full-width" id="choose-attendance-list-btn">選擇每日缺席名單 CSV</button>
+      <div class="attendance-names-form">
+        <label for="attendance-list-type">通報類別</label>
+        <select id="attendance-list-type" class="select-field">
+          <option value="absent">缺席</option>
+          <option value="early_leave">早退</option>
+        </select>
+        <label for="attendance-names">學生姓名清單</label>
+        <textarea id="attendance-names" class="input-field" rows="5" maxlength="20000" placeholder="陳大文&#10;李小明" aria-describedby="attendance-names-help"></textarea>
+        <p id="attendance-names-help">一行一個姓名，或用逗號、頓號分隔。英文姓名可保留空格。</p>
       </div>
-      <div id="attendance-list-info" class="file-info" style="display:none"></div>
-      <button class="btn-primary full-width ai-analyze-btn" id="process-attendance-list-btn" disabled>開始配對</button>
-      <div id="attendance-import-preview" style="display:none"></div>
+      <button class="btn-primary full-width ai-analyze-btn" id="process-attendance-list-btn" disabled>配對 A、B、C 三隊</button>
+      <div id="attendance-import-preview" aria-live="polite" style="display:none"></div>
     </section>
 
     <section class="home-team-card" aria-labelledby="home-team-title">
@@ -52,6 +57,7 @@
         <button id="login-btn" class="btn-primary">進入</button>
       </div>
     </section>
+    <section id="pending-home" class="pending-panel" aria-live="polite" hidden></section>
   </div>
 </div>
 
@@ -76,14 +82,17 @@
         <div id="header-skipped-badge" style="display:none"></div>
       </div>
     </div>
-    <button class="refresh-btn" id="refresh-btn" title="重新整理" aria-label="重新整理">更新</button>
+    <button class="refresh-btn" id="refresh-btn" title="檢查同步狀態" aria-label="檢查同步狀態">更新</button>
   </div>
 
   <!-- Clock -->
   <div class="clock-bar">
     <div class="clock" id="hkt-clock">--:--:--</div>
     <div class="clock-label">香港時間 HKT</div>
+    <div id="sync-status" class="sync-status connecting" role="status" aria-live="polite">正在連線…</div>
   </div>
+
+  <section id="pending-app" class="pending-panel" aria-live="polite" hidden></section>
 
   <!-- Tab Bar -->
   <div class="tab-bar" id="tab-bar">
@@ -96,16 +105,32 @@
   <div id="tab-list" class="tab-content">
     <div id="list-empty" style="display:none" class="info-box">雲端尚無學生資料，請前往「設定」上傳 CSV 名單。</div>
     <div id="list-content">
-      <div class="filter-row">
-        <input type="text" id="list-search" placeholder="搜尋班級或姓名…" class="input-field" style="flex:3">
-        <select id="list-filter" class="select-field" style="flex:1">
+      <div class="filter-row list-filter-row">
+        <input type="text" id="list-search" placeholder="搜尋班級或姓名…" class="input-field list-filter-search">
+        <select id="list-grade-filter" class="select-field list-filter-control" aria-label="篩選年級">
+          <option value="">所有年級</option>
+          <option value="1">一年級</option>
+          <option value="2">二年級</option>
+          <option value="3">三年級</option>
+          <option value="4">四年級</option>
+          <option value="5">五年級</option>
+          <option value="6">六年級</option>
+        </select>
+        <select id="list-class-filter" class="select-field list-filter-control" aria-label="篩選班別">
+          <option value="">所有班別</option>
+        </select>
+        <select id="list-activity-filter" class="select-field list-filter-control" aria-label="篩選今日活動">
+          <option value="all">全部活動狀況</option>
+          <option value="with">有活動</option>
+          <option value="without">沒有活動</option>
+        </select>
+        <select id="list-filter" class="select-field list-filter-control" aria-label="篩選出席狀態">
           <option value="all">全部</option>
           <option value="absent">未到</option>
           <option value="present">已到</option>
           <option value="skipped">不跟歸程隊</option>
         </select>
       </div>
-      <div id="activity-alert" style="display:none"></div>
       <div id="list-stats"></div>
       <div id="list-cards"></div>
     </div>
@@ -147,14 +172,10 @@
     <h3>系統</h3>
     <button class="btn-outline full-width" id="logout-btn">登出系統</button>
 
-    <hr>
-    <h3>修正歷史時區</h3>
-    <p class="caption">如過往紀錄時間顯示為 UTC（比香港慢 8 小時），按此一次性修正。每筆時間均 +8 小時。請勿重複執行。</p>
-    <button class="btn-outline full-width" id="fix-tz-btn">將所有歷史紀錄時間 +8 小時（UTC→HKT）</button>
   </div>
 
 </div>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=20260923-restore"></script>
 </body>
 </html>

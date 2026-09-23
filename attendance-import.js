@@ -71,6 +71,15 @@ export function combineAttendanceNotes(manualNote, importedNote) {
   return manual ? `${manual}；${imported}` : imported;
 }
 
+export function activitiesForWeekday(student, weekday) {
+  if (!Array.isArray(student?.activities) || !weekday) return [];
+  return student.activities
+    .map(activity => String(activity || "").trim())
+    .filter(activity => activity.startsWith(weekday))
+    .map(activity => activity.slice(weekday.length).replace(/^\s*[:：]?\s*/, "").trim())
+    .filter(Boolean);
+}
+
 function attendanceType(title, status, reason, teacherRemark, officeRemark) {
   const signal = [title, status, reason, teacherRemark, officeRemark].join(" ");
   return /早退|提早離校|早離|家長接走/.test(signal) ? "early_leave" : "absent";
@@ -144,6 +153,46 @@ export function parseAttendanceCsv(text) {
 
 function rosterKey(student) {
   return [normalizeText(student.name), normalizeText(student.class), normalizeNumber(student.number)].join("\u0000");
+}
+
+export function matchAttendanceNames(text, roster, type = "absent") {
+  if (!["absent", "early_leave"].includes(type)) throw new Error("請選擇缺席或早退。");
+  if (String(text || "").length > 20000) throw new Error("姓名清單過長，請分批配對。");
+  const stripListMarker = value => value.replace(/^\s*(?:[-*•]\s+|\d+[.)、]\s*)/, "").trim();
+  const names = String(text || "").normalize("NFKC").split(/\r?\n/)
+    .flatMap(line => stripListMarker(line).split(/[,、;；\t]+/))
+    .map(stripListMarker).filter(Boolean);
+  if (!names.length) throw new Error("請輸入至少一個學生姓名。");
+  const rosterByName = new Map();
+  roster.forEach(student => {
+    const key = normalizeText(student.name);
+    if (!key) return;
+    const candidates = rosterByName.get(key) || [];
+    candidates.push(student);
+    rosterByName.set(key, candidates);
+  });
+  const records = [], unmatched = [], seen = new Set();
+  let duplicateCount = 0;
+  names.forEach(name => {
+    const key = normalizeText(name);
+    if (seen.has(key)) { duplicateCount++; return; }
+    seen.add(key);
+    const candidates = rosterByName.get(key) || [];
+    const first = candidates[0];
+    const sharedStudent = candidates.length > 1 && first.id && clean(first.class) && normalizeNumber(first.number)
+      && candidates.every(student => student.id === first.id && rosterKey(student) === rosterKey(first) && /^[ABC]$/.test(student.team))
+      && new Set(candidates.map(student => student.team)).size === candidates.length;
+    if (candidates.length !== 1 && !sharedStudent) {
+      unmatched.push({ text: name, reason: candidates.length
+        ? `同名學生，請核對：${candidates.map(s => `${s.team}隊 ${s.class} ${s.number}號`).join("；")}`
+        : "三隊名單找不到相符姓名，請檢查拼寫" });
+      return;
+    }
+    candidates.forEach(student => records.push({ name: student.name, class: student.class || "", number: String(student.number || ""),
+      team: student.team, studentId: student.id, type, note: makeNote(type, "", "", "", ""),
+      matchMethod: sharedStudent ? "same_student_multiple_teams" : "unique_name" }));
+  });
+  return { records, unmatched, duplicateCount };
 }
 
 export function matchAttendanceRecords(records, roster) {

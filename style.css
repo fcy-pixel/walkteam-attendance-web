@@ -90,7 +90,11 @@ button { -webkit-tap-highlight-color: transparent; }
   letter-spacing: .04em;
 }
 .home-ai-card .privacy-note { margin-top: 14px; }
-.home-ai-card .upload-area { margin-top: 10px; }
+.attendance-names-form { display: grid; gap: 7px; margin-top: 14px; }
+.attendance-names-form label { color: var(--slate-700); font-size: .82rem; font-weight: 650; }
+.attendance-names-form textarea { min-height: 126px; resize: vertical; line-height: 1.6; }
+.attendance-names-form p { color: var(--slate-600); font-size: .76rem; line-height: 1.5; }
+.attendance-names-form textarea:disabled { opacity: .65; }
 .home-team-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 1.1fr); align-items: center; gap: 20px; background: var(--white); }
 .home-team-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .home-team-controls .btn-primary { min-width: 76px; }
@@ -256,6 +260,42 @@ button { -webkit-tap-highlight-color: transparent; }
   letter-spacing: .12em;
 }
 .clock-label { margin-top: 1px; color: var(--slate-500); font-size: .68rem; }
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  font-size: .67rem;
+  font-weight: 650;
+}
+.sync-status::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+.sync-status.synced { background: #ecfdf5; color: #047857; }
+.sync-status.pending,
+.sync-status.connecting { background: #eff6ff; color: #1d4ed8; }
+.sync-status.offline { background: #fff7ed; color: #c2410c; }
+.sync-status.error { background: #fef2f2; color: #b91c1c; }
+.pending-panel { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 12px; margin: 10px 0; color: #9a3412; font-size: .8rem; }
+.pending-panel[hidden] { display: none; }
+.pending-panel > p { margin: 5px 0 9px; }
+.pending-row { border-top: 1px solid #fed7aa; padding: 8px 0; }
+.pending-row span { font-size: .75rem; }
+.pending-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.pending-actions button { font-size: .75rem; padding: 7px 10px; }
+.student-pending { background: #ffedd5; color: #9a3412; border-radius: 5px; padding: 2px 5px; font-size: .7rem; }
+.student-last-editor, .student-audit { color: #64748b; font-size: .68rem; margin-top: 4px; }
+.student-audit summary { cursor: pointer; }
+.student-audit > div { padding: 3px 0; }
+.card-buttons button:disabled, .note-form button:disabled { opacity: .5; cursor: wait; }
 
 .tab-bar {
   display: flex;
@@ -282,6 +322,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .tab.active { background: var(--blue-50); color: var(--blue-700); box-shadow: inset 0 0 0 1px var(--blue-100); }
 .section-title { margin-bottom: 8px; color: var(--slate-900); font-size: .9rem; font-weight: 700; }
 .filter-row { display: flex; gap: 10px; margin-bottom: 14px; }
+.list-filter-row { flex-wrap: wrap; }
+.list-filter-search { flex: 2 1 220px; }
+.list-filter-control { flex: 1 1 120px; }
 .info-box {
   margin-bottom: 12px;
   padding: 13px 15px;
@@ -305,19 +348,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .stat-badge.present { background: var(--green-50); border-color: var(--green-100); color: var(--green-700); }
 .stat-badge.absent { background: var(--slate-100); border-color: var(--slate-200); color: var(--slate-700); }
 .stat-badge.skipped { background: var(--amber-50); border-color: var(--amber-100); color: var(--amber-700); }
-.activity-alert {
-  margin-bottom: 8px;
-  padding: 13px 15px;
-  border: 1px solid #f2d991;
-  border-left: 3px solid #d9a514;
-  border-radius: 9px;
-  background: var(--amber-50);
-}
-.activity-alert-title { margin-bottom: 5px; color: #704d00; font-size: .85rem; font-weight: 700; }
-.activity-alert-names { margin-bottom: 7px; color: #6f5320; font-size: .8rem; line-height: 1.55; }
-.activity-alert-hint { color: #8a6b28; font-size: .73rem; }
-.bulk-action { margin-bottom: 4px; border-color: #e5c75a; background: #fffdf3; color: #765711; }
-.bulk-action:hover { background: #fff8d7; border-color: #d9b936; }
 
 /* Student cards */
 .student-card {
@@ -369,9 +399,25 @@ button { -webkit-tap-highlight-color: transparent; }
   font-weight: 750;
   letter-spacing: .04em;
 }
+.student-today-activity {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 7px;
+  padding: 7px 9px;
+  border: 1px solid #ddd6fe;
+  border-radius: 7px;
+  background: #faf8ff;
+}
+.activity-label {
+  flex-shrink: 0;
+  margin: 2px 0 0;
+  color: #6d4bb4;
+}
+.student-activity-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .student-activity {
   display: inline-block;
-  margin: 2px 4px 0 0;
+  margin: 0;
   padding: 2px 7px;
   border: 1px solid #ddd6fe;
   border-radius: 5px;
@@ -402,6 +448,19 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .card-buttons { display: flex; gap: 7px; margin-top: 11px; }
 .card-buttons button { flex: 1; }
+
+/* One primary action per student. Secondary tools stay out of the roll-call flow. */
+.student-main-row { display: flex; align-items: center; gap: 10px; }
+.student-main-info { flex: 1; min-width: 0; }
+.student-main-info .student-heading { display: flex; flex-wrap: wrap; gap: 5px; }
+.student-main-info .student-meta { display: flex; margin: 4px 0 0; gap: 5px; }
+.student-quick-actions { display: flex; align-items: center; flex-shrink: 0; gap: 5px; }
+.quick-attendance { min-height: 44px; min-width: 82px; padding: 8px 9px; font-size: .88rem; touch-action: manipulation; }
+.student-more { min-height: 44px; min-width: 44px; padding: 8px 6px; font-size: .75rem; touch-action: manipulation; }
+.quick-attendance:disabled { opacity: .65; cursor: default; }
+.student-main-row .student-pending { padding: 0; background: transparent; font-size: .85rem; }
+.student-extra { margin-top: 8px; padding-top: 5px; border-top: 1px solid var(--slate-100); }
+.student-extra .card-buttons { margin-top: 3px; }
 
 /* Notes */
 .note-form { margin-top: 9px; padding: 12px; border: 1px solid var(--slate-200); border-radius: 8px; background: var(--slate-50); }
@@ -556,23 +615,69 @@ button { -webkit-tap-highlight-color: transparent; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
 
 @media (max-width: 640px) {
-  #app { padding: 10px 12px 40px; }
+  #app { padding: 8px 8px 36px; }
   .header-row { gap: 7px; }
-  .header-card { padding: 17px 18px; border-radius: 11px; gap: 12px; }
-  .header-kicker { font-size: .62rem; }
-  .header-title { font-size: 1.04rem; }
-  .header-date { font-size: .72rem; }
-  .progress-bar-wrap { width: 120px; }
-  .header-count { font-size: 2.2rem; }
-  .header-total { font-size: .95rem; }
-  .refresh-btn { min-width: 48px; height: 38px; font-size: .72rem; }
-  .clock { font-size: 1.08rem; }
-  .tab { min-height: 36px; padding: 7px 3px; font-size: .76rem; }
-  .filter-row { gap: 7px; }
-  .student-card { padding: 12px; }
-  .card-buttons { flex-wrap: wrap; }
-  .card-buttons button { min-width: calc(50% - 4px); }
-  .student-time { margin-left: 0; }
+  .header-card { padding: 10px 12px; border-radius: 9px; gap: 8px; }
+  .header-kicker { display: none; }
+  .header-title { font-size: .96rem; }
+  .header-date { margin-top: 1px; font-size: .66rem; }
+  .progress-bar-wrap { width: 96px; margin-top: 6px; }
+  .header-pct { margin-top: 2px; font-size: .61rem; }
+  .header-count { font-size: 1.7rem; }
+  .header-total { font-size: .78rem; }
+  .header-count-label { margin-top: 2px; font-size: .6rem; }
+  #header-skipped-badge { margin-top: 3px; padding: 2px 6px; font-size: .59rem; }
+  .refresh-btn { min-width: 44px; height: 36px; margin-top: 0; font-size: .69rem; }
+  .clock-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 1px 0 7px;
+  }
+  .clock { font-size: .86rem; letter-spacing: .06em; }
+  .clock-label { display: none; }
+  .sync-status { margin-top: 0; padding: 2px 7px; font-size: .62rem; }
+  .tab-bar { margin-bottom: 8px; padding: 2px; }
+  .tab { min-height: 34px; padding: 5px 3px; font-size: .74rem; }
+  .filter-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px;
+    margin-bottom: 7px;
+  }
+  .list-filter-search { grid-column: 1 / -1; }
+  .input-field,
+  .select-field { min-height: 38px; padding: 7px 9px; font-size: .8rem; }
+  .stats-row { gap: 4px; margin: 5px 0 7px; }
+  .stat-badge { padding: 3px 7px; font-size: .69rem; }
+  .student-card { margin-bottom: 5px; padding: 8px 9px; border-radius: 8px; }
+  .student-heading,
+  .student-meta { display: inline-flex; vertical-align: middle; }
+  .student-heading { gap: 5px; }
+  .student-meta { gap: 5px; margin: 0 0 0 7px; }
+  .status-dot { width: 7px; height: 7px; flex-basis: 7px; }
+  .student-name { font-size: .9rem; }
+  .student-status { padding: 1px 5px; font-size: .61rem; }
+  .student-time { margin-left: 3px; font-size: .67rem; }
+  .student-class { padding: 1px 5px; font-size: .65rem; }
+  .student-number { font-size: .68rem; }
+  .student-notes { margin-top: 3px; font-size: .7rem; }
+  .meta-label { margin-right: 4px; font-size: .61rem; }
+  .student-today-activity { gap: 5px; margin-top: 4px; padding: 4px 6px; }
+  .student-activity-list { gap: 3px; }
+  .student-activity { padding: 1px 5px; font-size: .64rem; }
+  .student-daily-note { margin-top: 4px; padding: 4px 6px; font-size: .69rem; }
+  .student-skip-badge { margin-top: 4px; padding: 2px 6px; font-size: .66rem; }
+  .card-buttons { flex-wrap: nowrap; gap: 4px; margin-top: 6px; }
+  .card-buttons button {
+    min-width: 0;
+    min-height: 36px;
+    padding: 6px 3px;
+    border-radius: 6px;
+    font-size: .7rem;
+    white-space: nowrap;
+  }
   .login-box { padding: 28px 24px; }
   #login-screen { align-items: flex-start; padding: 14px; }
   .home-box { padding: 22px 18px; gap: 14px; }
