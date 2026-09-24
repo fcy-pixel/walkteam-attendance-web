@@ -1,6 +1,6 @@
 import { activitiesForWeekday, combineAttendanceNotes, parseCsv, matchAttendanceNames } from "./attendance-import.js?v=20260910-team-lists";
 import { AttendanceOutbox, makeIntent, makeFirestoreCommit, openOutbox, syncPresentation } from "./sync-engine.js?v=20260906-quick-attendance";
-import { rosterCollection } from "./roster-version.js?v=20260923-roster";
+import { rosterCollection } from "./roster-version.js?v=20260924-roster";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    歸程隊點名系統 — Pure Frontend (Firebase Client SDK)
@@ -52,7 +52,7 @@ function showConfigError() {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const TEAMS = { A: "A隊", B: "B隊", C: "C隊" };
-const APP_VERSION = "2026.09.23-roster-restore";
+const APP_VERSION = "2026.09.24-roster-activities";
 const WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 const STAT_LABEL = { present: "已到", absent: "未到", skipped: "不跟歸程隊" };
 

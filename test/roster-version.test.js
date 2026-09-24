@@ -2,10 +2,11 @@ import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { rosterCollection } from "../roster-version.js";
 
-test("current and September 23 onwards use the transferred roster", () => {
-  assert.equal(rosterCollection("A"), "students_A_20260923");
+test("current and September 24 onwards use the updated roster", () => {
+  assert.equal(rosterCollection("A"), "students_A_20260924");
   assert.equal(rosterCollection("B", "2026-09-23"), "students_B_20260923");
-  assert.equal(rosterCollection("C", "2026-09-24"), "students_C_20260923");
+  assert.equal(rosterCollection("C", "2026-09-24"), "students_C_20260924");
+  assert.equal(rosterCollection("C", "2026-09-25"), "students_C_20260924");
 });
 
 test("older dates keep their original roster versions", () => {
